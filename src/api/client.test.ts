@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { extractErrorMessage } from './client';
+import { extractErrorMessage, extractFieldErrors } from './client';
 
 describe('extractErrorMessage', () => {
   it('extrai mensagem de erro de negócio (detail: string)', () => {
@@ -34,5 +34,37 @@ describe('extractErrorMessage', () => {
 
   it('retorna mensagem genérica para erro desconhecido', () => {
     expect(extractErrorMessage('algo inesperado')).toBe('Ocorreu um erro inesperado.');
+  });
+});
+
+describe('extractFieldErrors', () => {
+  it('mapeia erros 422 do corpo por campo, removendo o prefixo "Value error, "', () => {
+    const error = {
+      isAxiosError: true,
+      response: {
+        status: 422,
+        data: {
+          detail: [
+            { loc: ['body', 'logo_url'], msg: 'Value error, logo_url deve ser uma URL https:// valida.' },
+            { loc: ['body', 'nome'], msg: 'String should have at most 255 characters' },
+            { loc: ['query', 'competencia'], msg: 'ignorado' },
+          ],
+        },
+      },
+    };
+    expect(extractFieldErrors(error)).toEqual({
+      logo_url: 'logo_url deve ser uma URL https:// valida.',
+      nome: 'String should have at most 255 characters',
+    });
+  });
+
+  it('retorna objeto vazio para erros que não são 422 de validação', () => {
+    expect(
+      extractFieldErrors({ isAxiosError: true, response: { status: 409, data: { detail: 'x' } } })
+    ).toEqual({});
+    expect(
+      extractFieldErrors({ isAxiosError: true, response: { status: 422, data: { detail: 'x' } } })
+    ).toEqual({});
+    expect(extractFieldErrors({ isAxiosError: true, response: undefined })).toEqual({});
   });
 });

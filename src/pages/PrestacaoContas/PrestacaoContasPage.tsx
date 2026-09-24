@@ -3,6 +3,7 @@ import { Filter, TrendingDown, TrendingUp, Wallet } from 'lucide-react';
 import { prestacaoContasApi } from '../../api/prestacaoContas';
 import { extractErrorMessage } from '../../api/client';
 import { useCurrentStore } from '../../hooks/useCurrentStore';
+import { SemLojaState } from '../../components/loja/SemLojaState';
 import {
   Alert,
   Button,
@@ -18,13 +19,7 @@ import {
 import { SkeletonCard, SkeletonStatCards } from '../../components/ui/Skeleton';
 import type { PrestacaoContas } from '../../types/prestacaoContas';
 import { formatCurrency, formatMesAno, monthInputToCompetencia } from '../../utils/formatters';
-
-/** "YYYY-MM" do mês atual, usado como competência padrão ao abrir a tela. */
-function currentMonthInput(): string {
-  const now = new Date();
-  const mes = String(now.getMonth() + 1).padStart(2, '0');
-  return `${now.getFullYear()}-${mes}`;
-}
+import { currentMonthInput } from '../../utils/businessTime';
 
 function CategoriaTable({
   items,
@@ -121,8 +116,7 @@ export default function PrestacaoContasPage() {
     return (
       <>
         <PageHeader title="Prestação de contas" />
-        <EmptyState
-          title="Nenhuma loja cadastrada no sistema"
+        <SemLojaState
           description="Cadastre a loja antes de consultar a prestação de contas."
         />
       </>

@@ -5,6 +5,7 @@ import { membrosApi } from '../../api/membros';
 import { documentosApi } from '../../api/documentos';
 import { extractErrorMessage } from '../../api/client';
 import { useCurrentStore } from '../../hooks/useCurrentStore';
+import { SemLojaState } from '../../components/loja/SemLojaState';
 import {
   Alert,
   Button,
@@ -21,13 +22,7 @@ import type { Membro } from '../../types/membro';
 import type { DocumentoMembroData } from '../../types/documentoMembro';
 import { DEBITO_TIPO_LABELS } from '../../types/debito';
 import { formatCurrency, formatDataBr, formatMesAno, monthInputToCompetencia } from '../../utils/formatters';
-
-/** Mês atual no formato esperado por um <input type="month"> ("YYYY-MM"). */
-function currentMonthInput(): string {
-  const now = new Date();
-  const mes = String(now.getMonth() + 1).padStart(2, '0');
-  return `${now.getFullYear()}-${mes}`;
-}
+import { currentMonthInput } from '../../utils/businessTime';
 
 export default function DocumentosPage() {
   const { loja, loading: loadingLoja, error: lojaError } = useCurrentStore();
@@ -134,8 +129,7 @@ export default function DocumentosPage() {
     return (
       <>
         <PageHeader title="Documento do Irmão" />
-        <EmptyState
-          title="Nenhuma loja cadastrada no sistema"
+        <SemLojaState
           description="Cadastre a loja antes de visualizar o documento do irmão."
         />
       </>

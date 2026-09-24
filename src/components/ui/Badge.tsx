@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { SITUACAO_LABELS, type SituacaoCompetencia } from '../../types/debito';
 
 export type BadgeVariant = 'success' | 'danger' | 'warning' | 'neutral' | 'info';
 
@@ -35,6 +36,24 @@ export function Badge({ variant, children, dot = false, className = '' }: BadgeP
       {dot ? <span className={`h-1.5 w-1.5 rounded-full ${dotClasses[variant]}`} aria-hidden="true" /> : null}
       {children}
     </span>
+  );
+}
+
+const situacaoVariants: Record<SituacaoCompetencia, BadgeVariant> = {
+  ABERTO: 'warning',
+  PARCIAL: 'info',
+  PAGO: 'success',
+};
+
+/**
+ * Badge padronizado para a situação de pagamento de um débito (ABERTO/PAGO)
+ * ou de uma competência (ABERTO/PARCIAL/PAGO). Sempre com texto, não só cor.
+ */
+export function SituacaoBadge({ situacao }: { situacao: SituacaoCompetencia }) {
+  return (
+    <Badge variant={situacaoVariants[situacao]} dot>
+      {SITUACAO_LABELS[situacao]}
+    </Badge>
   );
 }
 

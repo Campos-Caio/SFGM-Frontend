@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Eye, FileText, Pencil, Plus, Search, Users } from 'lucide-react';
 import { membrosApi } from '../../api/membros';
 import { extractErrorMessage } from '../../api/client';
 import { useCurrentStore } from '../../hooks/useCurrentStore';
+import { SemLojaState } from '../../components/loja/SemLojaState';
 import {
   Alert,
   Card,
@@ -110,9 +111,8 @@ export default function MembrosListPage() {
     return (
       <>
         <PageHeader title="Membros" />
-        <EmptyState
+        <SemLojaState
           icon={Users}
-          title="Nenhuma loja cadastrada no sistema"
           description="Cadastre a loja antes de adicionar membros."
         />
       </>
@@ -192,8 +192,20 @@ export default function MembrosListPage() {
             <DataTable
               rowKey={(m) => m.id}
               rows={membrosFiltrados}
+              onRowClick={(m) => navigate(`/membros/${m.id}`)}
               columns={[
-                { header: 'Membro', render: (m) => <span className="font-medium text-slate-900">{m.nome}</span> },
+                {
+                  header: 'Membro',
+                  render: (m) => (
+                    <Link
+                      to={`/membros/${m.id}`}
+                      title="Ver cobranças do membro"
+                      className="font-medium text-slate-900 no-underline hover:text-blue-700 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                    >
+                      {m.nome}
+                    </Link>
+                  ),
+                },
                 { header: 'CIM', render: (m) => m.cim },
                 {
                   header: 'Status',

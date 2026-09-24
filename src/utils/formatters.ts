@@ -34,6 +34,33 @@ export function formatMesAno(competencia: string): string {
   return `${mes}/${ano}`;
 }
 
+const MESES = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+
+/**
+ * Formata uma competência (date "YYYY-MM-DD") como "Mês/AAAA" por extenso.
+ * Ex.: "2026-09-01" -> "Setembro/2026". Usa apenas a string (sem `Date`),
+ * portanto não sofre deslocamento de fuso horário.
+ */
+export function formatCompetenciaExtenso(competencia: string): string {
+  const [ano, mes] = competencia.split('-');
+  const nome = MESES[Number(mes) - 1];
+  if (!ano || !nome) return competencia;
+  return `${nome}/${ano}`;
+}
+
 /**
  * Formata uma data (date "YYYY-MM-DD") como "DD/MM/AAAA".
  */

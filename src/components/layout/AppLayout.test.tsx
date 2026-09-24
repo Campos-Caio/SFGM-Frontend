@@ -3,12 +3,16 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { AppLayout } from './AppLayout';
+import { AuthProvider } from '../../auth/AuthProvider';
 import { lojaApi } from '../../api/loja';
 import { membrosApi } from '../../api/membros';
+import { authApi } from '../../api/auth';
 import type { Loja } from '../../types/loja';
+import { StoreProvider } from '../../store/StoreProvider';
 
 vi.mock('../../api/loja');
 vi.mock('../../api/membros');
+vi.mock('../../api/auth');
 
 const loja: Loja = {
   id: 1,
@@ -20,7 +24,6 @@ const loja: Loja = {
   email: null,
   pix_chave: null,
   pix_descricao: null,
-  mensalidade_valor: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -30,11 +33,14 @@ describe('Navegação principal (Sidebar + AppLayout)', () => {
     vi.resetAllMocks();
     vi.mocked(lojaApi.list).mockResolvedValue([loja]);
     vi.mocked(membrosApi.list).mockResolvedValue([]);
+    vi.mocked(authApi.me).mockResolvedValue({ id: 1, login: 't', nome: 'Tesoureiro', csrf_token: 'c' });
   });
 
   it('navega da tela de Loja para a tela de Membros ao clicar no link da sidebar', async () => {
     const user = userEvent.setup();
     render(
+      <AuthProvider>
+      <StoreProvider>
       <MemoryRouter initialEntries={['/loja']}>
         <Routes>
           <Route element={<AppLayout />}>
@@ -43,6 +49,8 @@ describe('Navegação principal (Sidebar + AppLayout)', () => {
           </Route>
         </Routes>
       </MemoryRouter>
+      </StoreProvider>
+      </AuthProvider>
     );
 
     expect(screen.getByText('Sistema de Tesouraria')).toBeInTheDocument();

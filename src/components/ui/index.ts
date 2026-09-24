@@ -1,5 +1,6 @@
 export * from './Button';
 export * from './Card';
+export * from './Checkbox';
 export * from './DataTable';
 export * from './DescriptionList';
 export * from './DropdownMenu';
@@ -18,3 +19,4 @@ export * from './PageHeader';
 export * from './StatCard';
 export * from './Input';
 export * from './Select';
+export * from './SlowServerNotice';

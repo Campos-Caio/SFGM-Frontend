@@ -8,7 +8,6 @@ export interface Loja {
   email: string | null;
   pix_chave: string | null;
   pix_descricao: string | null;
-  mensalidade_valor: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -22,5 +21,4 @@ export interface LojaInput {
   email?: string | null;
   pix_chave?: string | null;
   pix_descricao?: string | null;
-  mensalidade_valor?: string | null;
 }

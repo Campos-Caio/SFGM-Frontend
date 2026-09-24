@@ -9,18 +9,21 @@ interface ModalProps {
   children?: ReactNode;
   footer?: ReactNode;
   onClose: () => void;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
 const sizeClasses = {
   sm: 'max-w-sm',
   md: 'max-w-md',
   lg: 'max-w-lg',
+  // Formulários com várias colunas (ex.: cadastro da Loja).
+  xl: 'max-w-3xl',
 };
 
 /**
  * Modal genérico do design system (base para ConfirmDialog e outros diálogos,
- * ex.: geração de mensalidades). Fecha com ESC ou clique no overlay.
+ * ex.: geração de mensalidades). Fecha com ESC ou clique no overlay. Conteúdo
+ * mais alto que a tela rola dentro do modal (título e rodapé ficam visíveis).
  */
 export function Modal({ open, title, description, children, footer, onClose, size = 'md' }: ModalProps) {
   const titleId = useId();
@@ -56,7 +59,7 @@ export function Modal({ open, title, description, children, footer, onClose, siz
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`w-full ${sizeClasses[size]} rounded-lg border border-slate-200 bg-white shadow-lg outline-none`}
+        className={`flex max-h-[calc(100vh-2rem)] w-full flex-col ${sizeClasses[size]} rounded-lg border border-slate-200 bg-white shadow-lg outline-none`}
       >
         <div className="flex items-start justify-between gap-4 px-6 pt-5">
           <div>
@@ -67,7 +70,7 @@ export function Modal({ open, title, description, children, footer, onClose, siz
           </div>
           <IconButton icon={X} aria-label="Fechar" size="sm" onClick={onClose} />
         </div>
-        {children ? <div className="px-6 py-4 text-sm text-slate-700">{children}</div> : null}
+        {children ? <div className="min-h-0 overflow-y-auto px-6 py-4 text-sm text-slate-700">{children}</div> : null}
         {footer ? (
           <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">{footer}</div>
         ) : (

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
@@ -9,6 +9,7 @@ import { prestacaoContasApi } from '../../api/prestacaoContas';
 import type { Loja } from '../../types/loja';
 import type { Lancamento } from '../../types/lancamento';
 import type { PrestacaoContas } from '../../types/prestacaoContas';
+import { StoreProvider } from '../../store/StoreProvider';
 
 vi.mock('../../api/loja');
 vi.mock('../../api/lancamentos');
@@ -24,7 +25,6 @@ const loja: Loja = {
   email: null,
   pix_chave: null,
   pix_descricao: null,
-  mensalidade_valor: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -53,27 +53,39 @@ const prestacao: PrestacaoContas = {
   resultado: '100.00',
 };
 
+// Instante de fronteira: 2026-09-01T02:30Z é 31/08/2026 22:30 em MS (UTC-4).
+// O app deve usar o mês de MS ("2026-08"), e não o de UTC ("2026-09"),
+// independentemente do fuso do ambiente que roda os testes.
+const AGORA = new Date('2026-09-01T02:30:00Z');
+
 function mesAtualInput(): string {
-  const hoje = new Date();
-  return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+  return '2026-08';
 }
 
 function renderPage(initialEntries: Array<string | { pathname: string; state?: unknown }> = ['/lancamentos']) {
   return render(
+    <StoreProvider>
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/lancamentos" element={<LancamentosPage />} />
       </Routes>
     </MemoryRouter>
+    </StoreProvider>
   );
 }
 
 describe('LancamentosPage — filtros, indicadores e lista', () => {
   beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(AGORA);
     vi.resetAllMocks();
     vi.mocked(lojaApi.list).mockResolvedValue([loja]);
     vi.mocked(prestacaoContasApi.get).mockResolvedValue(prestacao);
     vi.mocked(lancamentosApi.listByLoja).mockResolvedValue([lancamento]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('ao carregar, usa o mês atual como competência padrão e busca resumo + lista', async () => {

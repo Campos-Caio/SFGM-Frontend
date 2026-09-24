@@ -4,10 +4,25 @@ import { ArrowLeft, Pencil } from 'lucide-react';
 import { debitosApi } from '../../api/debitos';
 import { membrosApi } from '../../api/membros';
 import { extractErrorMessage } from '../../api/client';
-import { Alert, Button, Card, DescriptionList, ErrorState, LinkButton, PageHeader } from '../../components/ui';
+import {
+  Alert,
+  Button,
+  Card,
+  DescriptionList,
+  ErrorState,
+  LinkButton,
+  PageHeader,
+  SituacaoBadge,
+} from '../../components/ui';
 import { SkeletonCard } from '../../components/ui/Skeleton';
-import { DEBITO_TIPO_LABELS, type DebitoMembro } from '../../types/debito';
-import { formatCurrency, formatDataBr, formatMesAno } from '../../utils/formatters';
+import { DEBITO_TIPO_LABELS, FORMA_PAGAMENTO_LABELS, type DebitoMembro } from '../../types/debito';
+import { formatDateTimeBr } from '../../utils/businessTime';
+import {
+  formatCompetenciaExtenso,
+  formatCurrency,
+  formatDataBr,
+  formatMesAno,
+} from '../../utils/formatters';
 
 const SUCCESS_MESSAGES: Record<string, string> = {
   criado: 'Débito cadastrado com sucesso.',
@@ -85,12 +100,35 @@ export default function DebitoDetailPage() {
             { label: 'Data', value: formatDataBr(debito.data) },
             { label: 'Competência', value: formatMesAno(debito.competencia) },
             { label: 'Observação', value: debito.observacao || '-' },
+            {
+              label: `Cobrança de ${formatCompetenciaExtenso(debito.competencia)}`,
+              value: <SituacaoBadge situacao={debito.situacao} />,
+            },
+            ...(debito.situacao === 'PAGO'
+              ? [
+                  {
+                    label: 'Data do pagamento',
+                    value: debito.data_pagamento ? formatDataBr(debito.data_pagamento) : '-',
+                  },
+                  {
+                    label: 'Forma de pagamento',
+                    value: debito.forma_pagamento ? FORMA_PAGAMENTO_LABELS[debito.forma_pagamento] : '-',
+                  },
+                  {
+                    label: 'Baixa registrada em',
+                    value: debito.pago_em ? formatDateTimeBr(debito.pago_em) : '-',
+                  },
+                ]
+              : []),
           ]}
         />
         <div className="flex gap-3">
-          <LinkButton to={`/debitos/${debito.id}/editar`} icon={Pencil}>
-            Editar
-          </LinkButton>
+          {/* Débito de cobrança já paga não pode ser alterado (o backend responde 409). */}
+          {debito.situacao !== 'PAGO' && (
+            <LinkButton to={`/debitos/${debito.id}/editar`} icon={Pencil}>
+              Editar
+            </LinkButton>
+          )}
           <LinkButton to="/debitos" variant="ghost" icon={ArrowLeft}>
             Voltar
           </LinkButton>

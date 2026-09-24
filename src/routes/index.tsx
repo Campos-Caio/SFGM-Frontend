@@ -1,5 +1,8 @@
 import { createBrowserRouter } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
+import { RequireAuth } from '../auth/RequireAuth';
+import { RequireLoja } from '../store/RequireLoja';
+import LoginPage from '../pages/Login/LoginPage';
 import DashboardPage from '../pages/Dashboard/DashboardPage';
 import LojaPage from '../pages/Loja/LojaPage';
 import MembrosListPage from '../pages/Membros/MembrosListPage';
@@ -15,32 +18,47 @@ import PrestacaoContasPage from '../pages/PrestacaoContas/PrestacaoContasPage';
 import DocumentosPage from '../pages/Documentos/DocumentosPage';
 
 export const router = createBrowserRouter([
+  { path: '/login', element: <LoginPage /> },
   {
-    path: '/',
-    element: <AppLayout />,
+    // Todas as telas de negócio exigem sessão (a API retorna 401 sem token).
+    element: <RequireAuth />,
     children: [
-      { index: true, element: <DashboardPage /> },
+      {
+        path: '/',
+        element: <AppLayout />,
+        children: [
+          { index: true, element: <DashboardPage /> },
 
-      { path: 'loja', element: <LojaPage /> },
+          { path: 'loja', element: <LojaPage /> },
 
-      { path: 'membros', element: <MembrosListPage /> },
-      { path: 'membros/novo', element: <MembroFormPage /> },
-      { path: 'membros/:id', element: <MembroDetailPage /> },
-      { path: 'membros/:id/editar', element: <MembroFormPage /> },
+          { path: 'membros', element: <MembrosListPage /> },
+          { path: 'membros/:id', element: <MembroDetailPage /> },
 
-      { path: 'debitos', element: <DebitosListPage /> },
-      { path: 'debitos/novo', element: <DebitoFormPage /> },
-      { path: 'debitos/:id', element: <DebitoDetailPage /> },
-      { path: 'debitos/:id/editar', element: <DebitoFormPage /> },
+          { path: 'debitos', element: <DebitosListPage /> },
+          { path: 'debitos/:id', element: <DebitoDetailPage /> },
 
-      { path: 'lancamentos', element: <LancamentosPage /> },
-      { path: 'lancamentos/novo', element: <LancamentoFormPage /> },
-      { path: 'lancamentos/:id', element: <LancamentoDetailPage /> },
-      { path: 'lancamentos/:id/editar', element: <LancamentoFormPage /> },
+          { path: 'lancamentos', element: <LancamentosPage /> },
+          { path: 'lancamentos/:id', element: <LancamentoDetailPage /> },
 
-      { path: 'prestacao-contas', element: <PrestacaoContasPage /> },
+          { path: 'prestacao-contas', element: <PrestacaoContasPage /> },
 
-      { path: 'documentos', element: <DocumentosPage /> },
+          { path: 'documentos', element: <DocumentosPage /> },
+
+          {
+            // Formulários que gravam dados da loja: sem loja cadastrada, o
+            // guarda mostra "Cadastre a Loja" no lugar do formulário.
+            element: <RequireLoja />,
+            children: [
+              { path: 'membros/novo', element: <MembroFormPage /> },
+              { path: 'membros/:id/editar', element: <MembroFormPage /> },
+              { path: 'debitos/novo', element: <DebitoFormPage /> },
+              { path: 'debitos/:id/editar', element: <DebitoFormPage /> },
+              { path: 'lancamentos/novo', element: <LancamentoFormPage /> },
+              { path: 'lancamentos/:id/editar', element: <LancamentoFormPage /> },
+            ],
+          },
+        ],
+      },
     ],
   },
 ]);
