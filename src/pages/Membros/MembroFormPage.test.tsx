@@ -7,6 +7,7 @@ import { lojaApi } from '../../api/loja';
 import { membrosApi } from '../../api/membros';
 import type { Loja } from '../../types/loja';
 import type { Membro } from '../../types/membro';
+import { StoreProvider } from '../../store/StoreProvider';
 
 vi.mock('../../api/loja');
 vi.mock('../../api/membros');
@@ -21,19 +22,20 @@ const loja: Loja = {
   email: null,
   pix_chave: null,
   pix_descricao: null,
-  mensalidade_valor: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
 
 function renderPage() {
   return render(
+    <StoreProvider>
     <MemoryRouter initialEntries={['/membros/novo']}>
       <Routes>
         <Route path="/membros/novo" element={<MembroFormPage />} />
         <Route path="/membros/:id" element={<div>Detalhe do membro criado</div>} />
       </Routes>
     </MemoryRouter>
+    </StoreProvider>
   );
 }
 

@@ -1,12 +1,14 @@
+import { useEffect } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import MembrosListPage from './MembrosListPage';
 import { lojaApi } from '../../api/loja';
 import { membrosApi } from '../../api/membros';
 import type { Loja } from '../../types/loja';
 import type { Membro } from '../../types/membro';
+import { StoreProvider } from '../../store/StoreProvider';
 
 // Mocka os módulos de API (não a rede real) — os componentes só conhecem
 // lojaApi/membrosApi, então mockamos esses módulos diretamente.
@@ -23,7 +25,6 @@ const loja: Loja = {
   email: null,
   pix_chave: null,
   pix_descricao: null,
-  mensalidade_valor: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -40,9 +41,23 @@ const membro: Membro = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
+// Registra cada mudança de rota (pathname + search) para verificar quantas
+// navegações aconteceram e para onde.
+let visited: string[] = [];
+function LocationSpy() {
+  const location = useLocation();
+  useEffect(() => {
+    visited.push(location.pathname + location.search);
+  }, [location]);
+  return null;
+}
+
 function renderPage() {
+  visited = [];
   return render(
+    <StoreProvider>
     <MemoryRouter initialEntries={['/membros']}>
+      <LocationSpy />
       <Routes>
         <Route path="/membros" element={<MembrosListPage />} />
         <Route path="/membros/:id" element={<div>Detalhe do membro</div>} />
@@ -50,6 +65,7 @@ function renderPage() {
         <Route path="/documentos" element={<div>Tela de documentos</div>} />
       </Routes>
     </MemoryRouter>
+    </StoreProvider>
   );
 }
 
@@ -129,6 +145,21 @@ describe('MembrosListPage', () => {
     expect(screen.getByText('Ciclano Beltrano')).toBeInTheDocument();
   });
 
+  it('o nome do membro é um link para a tela de detalhe (cobranças do membro)', async () => {
+    const user = userEvent.setup();
+    vi.mocked(lojaApi.list).mockResolvedValue([loja]);
+    vi.mocked(membrosApi.list).mockResolvedValue([membro]);
+
+    renderPage();
+
+    const link = await screen.findByRole('link', { name: 'Fulano de Tal' });
+    expect(link).toHaveAttribute('href', '/membros/10');
+
+    await user.click(link);
+
+    expect(await screen.findByText('Detalhe do membro')).toBeInTheDocument();
+  });
+
   it('navega para a tela de detalhe ao clicar em "Ver membro"', async () => {
     const user = userEvent.setup();
     vi.mocked(lojaApi.list).mockResolvedValue([loja]);
@@ -192,6 +223,101 @@ describe('MembrosListPage', () => {
     const linha = screen.getByText('Fulano de Tal').closest('tr');
     await waitFor(() => expect(within(linha as HTMLElement).getByText('Inativo')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Ativar Fulano de Tal' })).toBeInTheDocument();
+  });
+
+  describe('linha inteira clicável', () => {
+    async function renderComMembro() {
+      vi.mocked(lojaApi.list).mockResolvedValue([loja]);
+      vi.mocked(membrosApi.list).mockResolvedValue([{ ...membro, email: 'fulano@example.com' }]);
+      renderPage();
+      await screen.findByText('Fulano de Tal');
+      return userEvent.setup();
+    }
+
+    it('navega para o detalhe ao clicar em célula que não é o nome nem ação (CIM)', async () => {
+      const user = await renderComMembro();
+      const linha = screen.getByText('Fulano de Tal').closest('tr') as HTMLElement;
+
+      await user.click(screen.getByText('12345'));
+
+      expect(await screen.findByText('Detalhe do membro')).toBeInTheDocument();
+      expect(visited).toEqual(['/membros', '/membros/10']);
+      expect(linha).toHaveClass('cursor-pointer');
+    });
+
+    it('navega ao clicar no espaço vazio da coluna de ações (fora dos botões)', async () => {
+      const user = await renderComMembro();
+      const celulaAcoes = screen.getByRole('button', { name: 'Editar Fulano de Tal' }).closest('td') as HTMLElement;
+
+      await user.click(celulaAcoes);
+
+      expect(await screen.findByText('Detalhe do membro')).toBeInTheDocument();
+    });
+
+    it('o clique no link do nome navega uma única vez', async () => {
+      const user = await renderComMembro();
+
+      await user.click(screen.getByRole('link', { name: 'Fulano de Tal' }));
+
+      expect(await screen.findByText('Detalhe do membro')).toBeInTheDocument();
+      expect(visited).toEqual(['/membros', '/membros/10']);
+    });
+
+    it('"Ver membro" navega ao detalhe uma única vez (sem navegação duplicada da linha)', async () => {
+      const user = await renderComMembro();
+
+      await user.click(screen.getByRole('button', { name: 'Ver membro Fulano de Tal' }));
+
+      expect(await screen.findByText('Detalhe do membro')).toBeInTheDocument();
+      expect(visited).toEqual(['/membros', '/membros/10']);
+    });
+
+    it('"Editar" vai para a edição e não para o detalhe', async () => {
+      const user = await renderComMembro();
+
+      await user.click(screen.getByRole('button', { name: 'Editar Fulano de Tal' }));
+
+      expect(await screen.findByText('Tela de edição do membro')).toBeInTheDocument();
+      expect(visited).toEqual(['/membros', '/membros/10/editar']);
+    });
+
+    it('"Ver documento" vai para documentos com o membro e não para o detalhe', async () => {
+      const user = await renderComMembro();
+
+      await user.click(screen.getByRole('button', { name: 'Ver documento de Fulano de Tal' }));
+
+      expect(await screen.findByText('Tela de documentos')).toBeInTheDocument();
+      expect(visited).toEqual(['/membros', '/documentos?membro_id=10']);
+    });
+
+    it('o botão de status abre o diálogo de confirmação sem navegar para o detalhe', async () => {
+      const user = await renderComMembro();
+
+      await user.click(screen.getByRole('button', { name: 'Desativar Fulano de Tal' }));
+
+      expect(await screen.findByRole('dialog', { name: 'Inativar membro' })).toBeInTheDocument();
+      expect(screen.queryByText('Detalhe do membro')).not.toBeInTheDocument();
+      expect(visited).toEqual(['/membros']);
+    });
+
+    it('não navega com Ctrl+clique na linha nem com texto selecionado', async () => {
+      const user = await renderComMembro();
+      const celulaCim = screen.getByText('12345');
+
+      await user.keyboard('{Control>}');
+      await user.click(celulaCim);
+      await user.keyboard('{/Control}');
+      expect(screen.queryByText('Detalhe do membro')).not.toBeInTheDocument();
+
+      window.getSelection()?.selectAllChildren(celulaCim);
+      fireEvent.click(celulaCim);
+      expect(screen.queryByText('Detalhe do membro')).not.toBeInTheDocument();
+      expect(visited).toEqual(['/membros']);
+
+      window.getSelection()?.removeAllRanges();
+      fireEvent.click(celulaCim);
+      expect(await screen.findByText('Detalhe do membro')).toBeInTheDocument();
+    });
   });
 
   it('mostra erro quando a atualização de status falha, sem substituir a tabela', async () => {

@@ -15,6 +15,7 @@ import {
 } from '../../components/ui';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import type { Membro } from '../../types/membro';
+import DebitosPorCompetenciaSection from './DebitosPorCompetenciaSection';
 
 const SUCCESS_MESSAGES: Record<string, string> = {
   criado: 'Membro cadastrado com sucesso.',
@@ -126,6 +127,8 @@ export default function MembroDetailPage() {
           </LinkButton>
         </div>
       </Card>
+
+      <DebitosPorCompetenciaSection key={membro.id} lojaId={membro.loja_id} membroId={membro.id} />
     </>
   );
 }

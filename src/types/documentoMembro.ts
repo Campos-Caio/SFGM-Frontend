@@ -10,5 +10,7 @@ export interface DocumentoMembroData {
   competencia_prestacao: string;
   debitos: DebitoMembro[];
   total_debitos: string;
+  /** Soma apenas dos débitos em aberto. Presente no JSON, mas a tela não o exibe. */
+  total_em_aberto: string;
   prestacao_contas: PrestacaoContas;
 }

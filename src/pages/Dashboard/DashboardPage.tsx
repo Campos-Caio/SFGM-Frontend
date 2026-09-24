@@ -4,10 +4,10 @@ import { debitosApi } from '../../api/debitos';
 import { prestacaoContasApi } from '../../api/prestacaoContas';
 import { extractErrorMessage } from '../../api/client';
 import { useCurrentStore } from '../../hooks/useCurrentStore';
+import { SemLojaState } from '../../components/loja/SemLojaState';
 import {
   Card,
   CardHeader,
-  EmptyState,
   ErrorState,
   LinkButton,
   PageHeader,
@@ -17,23 +17,21 @@ import { SkeletonStatCards } from '../../components/ui/Skeleton';
 import type { DebitoMembro } from '../../types/debito';
 import type { PrestacaoContas } from '../../types/prestacaoContas';
 import { formatCurrency } from '../../utils/formatters';
-
-/** "YYYY-MM-01" da competência atual. */
-function currentCompetencia(): string {
-  const now = new Date();
-  const mes = String(now.getMonth() + 1).padStart(2, '0');
-  return `${now.getFullYear()}-${mes}-01`;
-}
+import { BUSINESS_TIME_ZONE, businessHour, currentCompetencia } from '../../utils/businessTime';
 
 function greeting(): string {
-  const hora = new Date().getHours();
+  const hora = businessHour();
   if (hora < 12) return 'Bom dia';
   if (hora < 18) return 'Boa tarde';
   return 'Boa noite';
 }
 
 function mesAnoAtualExtenso(): string {
-  const texto = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(new Date());
+  const texto = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: BUSINESS_TIME_ZONE,
+  }).format(new Date());
   return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
@@ -88,8 +86,7 @@ export default function DashboardPage() {
     return (
       <>
         <PageHeader title="Visão geral" />
-        <EmptyState
-          title="Nenhuma loja cadastrada no sistema"
+        <SemLojaState
           description="Cadastre a loja antes de acompanhar os indicadores de tesouraria."
         />
       </>

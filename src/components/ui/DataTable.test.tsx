@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { DataTable } from './DataTable';
 
 interface Row {
@@ -49,5 +50,44 @@ describe('DataTable', () => {
       />
     );
     expect(screen.getByRole('columnheader', { name: 'Valor' }).className).toContain('text-right');
+  });
+
+  it('sem onRowClick a linha não é sinalizada como clicável', () => {
+    render(<DataTable rowKey={(r: Row) => r.id} rows={rows} columns={[{ header: 'Nome', render: (r) => r.nome }]} />);
+    expect(screen.getByText('Mensalidade').closest('tr')?.className).not.toContain('cursor-pointer');
+  });
+
+  it('com onRowClick, clicar na célula chama o handler com a linha; controles interativos não disparam', async () => {
+    const user = userEvent.setup();
+    const onRowClick = vi.fn();
+    const onBotao = vi.fn();
+    render(
+      <DataTable
+        rowKey={(r: Row) => r.id}
+        rows={rows}
+        onRowClick={onRowClick}
+        columns={[
+          { header: 'Nome', render: (r) => r.nome },
+          {
+            header: 'Ações',
+            render: (r) => (
+              <button type="button" onClick={() => onBotao(r.id)}>
+                Agir {r.id}
+              </button>
+            ),
+          },
+        ]}
+      />
+    );
+
+    expect(screen.getByText('Mensalidade').closest('tr')).toHaveClass('cursor-pointer');
+
+    await user.click(screen.getByText('Doação'));
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+    expect(onRowClick).toHaveBeenCalledWith(rows[1]);
+
+    await user.click(screen.getByRole('button', { name: 'Agir 1' }));
+    expect(onBotao).toHaveBeenCalledWith(1);
+    expect(onRowClick).toHaveBeenCalledTimes(1);
   });
 });

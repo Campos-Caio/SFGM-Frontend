@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 
 export interface DataTableColumn<T> {
   header: string;
@@ -17,6 +17,25 @@ interface DataTableProps<T> {
   /** Extrai uma key estável de cada linha (ex.: row => row.id). */
   rowKey: (row: T) => string | number;
   className?: string;
+  /**
+   * Torna a linha inteira clicável (opcional; sem ela a linha não é clicável).
+   * Não dispara quando o clique vem de um controle interativo dentro da linha
+   * (link, botão, campo etc.), com Ctrl/Cmd/Shift/Alt ou com texto selecionado.
+   * Não substitui um link real na linha: ele segue sendo o alvo de teclado,
+   * leitor de tela e "abrir em nova aba".
+   */
+  onRowClick?: (row: T) => void;
+}
+
+const INTERACTIVE_SELECTOR = 'a,button,input,select,textarea,label,summary,[role="button"],[role="link"]';
+
+function shouldIgnoreRowClick(event: MouseEvent<HTMLElement>): boolean {
+  if (event.defaultPrevented) return true;
+  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return true;
+  const target = event.target as HTMLElement | null;
+  if (target?.closest?.(INTERACTIVE_SELECTOR)) return true;
+  const selection = typeof window !== 'undefined' ? window.getSelection?.() : null;
+  return !!selection && !selection.isCollapsed && selection.toString().length > 0;
 }
 
 /**
@@ -24,7 +43,7 @@ interface DataTableProps<T> {
  * recebe colunas + linhas. Cabeçalho consistente, hover de linha, valores
  * monetários alinháveis à direita e rolagem horizontal em telas estreitas.
  */
-export function DataTable<T>({ columns, rows, rowKey, className = '' }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, className = '', onRowClick }: DataTableProps<T>) {
   return (
     <div className={`overflow-x-auto bg-white border border-slate-200 rounded-lg shadow-sm ${className}`}>
       <table className="w-full min-w-[640px] border-collapse text-sm">
@@ -45,7 +64,19 @@ export function DataTable<T>({ columns, rows, rowKey, className = '' }: DataTabl
         </thead>
         <tbody>
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors">
+            <tr
+              key={rowKey(row)}
+              onClick={
+                onRowClick
+                  ? (event) => {
+                      if (!shouldIgnoreRowClick(event)) onRowClick(row);
+                    }
+                  : undefined
+              }
+              className={`border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition-colors${
+                onRowClick ? ' cursor-pointer' : ''
+              }`}
+            >
               {columns.map((col) => (
                 <td
                   key={col.header}

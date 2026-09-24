@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import DocumentosPage from './DocumentosPage';
@@ -9,6 +9,7 @@ import { documentosApi } from '../../api/documentos';
 import type { Loja } from '../../types/loja';
 import type { Membro } from '../../types/membro';
 import type { DocumentoMembroData } from '../../types/documentoMembro';
+import { StoreProvider } from '../../store/StoreProvider';
 
 vi.mock('../../api/loja');
 vi.mock('../../api/membros');
@@ -24,7 +25,6 @@ const loja: Loja = {
   email: null,
   pix_chave: null,
   pix_descricao: null,
-  mensalidade_valor: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -60,6 +60,7 @@ const documento: DocumentoMembroData = {
   competencia_prestacao: '2026-07-01',
   debitos: [],
   total_debitos: '0.00',
+  total_em_aberto: '0.00',
   prestacao_contas: {
     loja_id: 1,
     competencia: '2026-07-01',
@@ -73,11 +74,13 @@ const documento: DocumentoMembroData = {
 
 function renderPage(initialPath: string) {
   return render(
+    <StoreProvider>
     <MemoryRouter initialEntries={[initialPath]}>
       <Routes>
         <Route path="/documentos" element={<DocumentosPage />} />
       </Routes>
     </MemoryRouter>
+    </StoreProvider>
   );
 }
 
@@ -105,6 +108,79 @@ describe('DocumentosPage', () => {
 
     expect(await screen.findByText('Irmão:')).toBeInTheDocument();
     expect(documentosApi.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('usa o mês de MS (e não o de UTC) como competência padrão na virada de mês', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    // 2026-09-01T02:30Z = 31/08/2026 22:30 em MS (UTC-4).
+    vi.setSystemTime(new Date('2026-09-01T02:30:00Z'));
+
+    renderPage('/documentos?membro_id=5');
+
+    await waitFor(() =>
+      expect(documentosApi.get).toHaveBeenCalledWith(1, 5, '2026-08-01')
+    );
+  });
+
+  it('não mostra situação nem pagamento no documento (enviado antes do pagamento) e mantém o Total', async () => {
+    const base = {
+      membro_id: 5,
+      tipo: 'MENSALIDADE' as const,
+      valor: '100.00',
+      data: '2026-08-05',
+      competencia: '2026-08-01',
+      observacao: null,
+      pago_em: null,
+      data_pagamento: null,
+      forma_pagamento: null,
+      debito_recorrente_id: null,
+      created_at: '2026-08-05T00:00:00Z',
+      updated_at: '2026-08-05T00:00:00Z',
+    };
+    vi.mocked(documentosApi.get).mockResolvedValue({
+      ...documento,
+      debitos: [
+        { ...base, id: 1, descricao: 'Aberto um', situacao: 'ABERTO' },
+        {
+          ...base,
+          id: 2,
+          descricao: 'Pago um',
+          valor: '50.00',
+          situacao: 'PAGO',
+          pago_em: '2026-08-10T15:00:00+00:00',
+          data_pagamento: '2026-08-10',
+          forma_pagamento: 'PIX',
+        },
+      ],
+      total_debitos: '150.00',
+      total_em_aberto: '100.00',
+    });
+
+    renderPage('/documentos?membro_id=5');
+
+    const linhaAberto = (await screen.findByText('Mensalidade — Aberto um')).closest('tr')!;
+    const linhaPago = screen.getByText('Mensalidade — Pago um').closest('tr')!;
+    expect(within(linhaAberto).getByText('R$ 100,00')).toBeInTheDocument();
+    expect(within(linhaPago).getByText('R$ 50,00')).toBeInTheDocument();
+
+    // O "Total" (todos os débitos) permanece.
+    const linhaTotal = screen.getByText('Total').closest('tr')!;
+    expect(within(linhaTotal).getByText('R$ 150,00')).toBeInTheDocument();
+
+    // O documento é enviado antes do pagamento: nada sobre situação/pagamento.
+    expect(screen.queryByText('Situação')).not.toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Situação' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Total em aberto')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pagamento efetuado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Saldo atual')).not.toBeInTheDocument();
+    expect(screen.queryByText('Em aberto')).not.toBeInTheDocument();
+    expect(screen.queryByText('Pago')).not.toBeInTheDocument();
+    expect(screen.queryByText('R$ 100,00', { selector: 'tfoot *' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual([
+      'Descrição',
+      'Data',
+      'Valor',
+    ]);
   });
 
   it('não busca automaticamente quando o membro_id da URL não pertence à loja', async () => {

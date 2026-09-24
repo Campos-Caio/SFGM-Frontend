@@ -5,6 +5,7 @@ import { lancamentosApi } from '../../api/lancamentos';
 import { prestacaoContasApi } from '../../api/prestacaoContas';
 import { extractErrorMessage } from '../../api/client';
 import { useCurrentStore } from '../../hooks/useCurrentStore';
+import { SemLojaState } from '../../components/loja/SemLojaState';
 import {
   Alert,
   Badge,
@@ -28,13 +29,7 @@ import {
   formatCurrency,
   monthInputToCompetencia,
 } from '../../utils/formatters';
-
-/** "YYYY-MM" do mês atual, usado como competência padrão ao abrir a tela. */
-function currentMonthInput(): string {
-  const now = new Date();
-  const mes = String(now.getMonth() + 1).padStart(2, '0');
-  return `${now.getFullYear()}-${mes}`;
-}
+import { currentMonthInput } from '../../utils/businessTime';
 
 const SUCCESS_MESSAGES: Record<string, string> = {
   excluido: 'Lançamento excluído com sucesso.',
@@ -121,8 +116,7 @@ export default function LancamentosPage() {
     return (
       <>
         <PageHeader title="Lançamentos" />
-        <EmptyState
-          title="Nenhuma loja cadastrada no sistema"
+        <SemLojaState
           description="Cadastre a loja antes de gerenciar lançamentos."
         />
       </>

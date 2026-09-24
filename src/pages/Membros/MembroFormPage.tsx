@@ -115,6 +115,7 @@ export default function MembroFormPage() {
               id="nome"
               value={form.nome}
               onChange={(e) => setForm({ ...form, nome: e.target.value })}
+              maxLength={255}
               required
             />
           </FormField>
@@ -123,6 +124,7 @@ export default function MembroFormPage() {
               id="cim"
               value={form.cim}
               onChange={(e) => setForm({ ...form, cim: e.target.value })}
+              maxLength={50}
               required
             />
           </FormField>
@@ -134,6 +136,7 @@ export default function MembroFormPage() {
               id="telefone"
               value={form.telefone}
               onChange={(e) => setForm({ ...form, telefone: e.target.value })}
+              maxLength={20}
             />
           </FormField>
           <FormField label="E-mail" htmlFor="email">
@@ -142,6 +145,7 @@ export default function MembroFormPage() {
               type="email"
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
+              maxLength={255}
             />
           </FormField>
         </FormSection>

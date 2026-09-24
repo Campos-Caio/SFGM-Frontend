@@ -8,6 +8,7 @@ import { debitosApi } from '../../api/debitos';
 import type { Loja } from '../../types/loja';
 import type { PrestacaoContas } from '../../types/prestacaoContas';
 import type { DebitoMembro } from '../../types/debito';
+import { StoreProvider } from '../../store/StoreProvider';
 
 vi.mock('../../api/loja');
 vi.mock('../../api/prestacaoContas');
@@ -23,7 +24,6 @@ const loja: Loja = {
   email: null,
   pix_chave: null,
   pix_descricao: null,
-  mensalidade_valor: null,
   created_at: '2026-01-01T00:00:00Z',
   updated_at: '2026-01-01T00:00:00Z',
 };
@@ -47,17 +47,24 @@ const debito: DebitoMembro = {
   data: '2026-08-05',
   competencia: '2026-08-01',
   observacao: null,
+  situacao: 'ABERTO',
+  pago_em: null,
+  data_pagamento: null,
+  forma_pagamento: null,
+  debito_recorrente_id: null,
   created_at: '2026-08-05T00:00:00Z',
   updated_at: '2026-08-05T00:00:00Z',
 };
 
 function renderPage() {
   return render(
+    <StoreProvider>
     <MemoryRouter initialEntries={['/']}>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
       </Routes>
     </MemoryRouter>
+    </StoreProvider>
   );
 }
 
