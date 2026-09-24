@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { useEffect } from 'react';
@@ -9,7 +9,8 @@ import { RequireAuth } from './RequireAuth';
 import { clearCsrfToken, getCsrfToken } from './csrf';
 import LoginPage from '../pages/Login/LoginPage';
 import { AppLayout } from '../components/layout/AppLayout';
-import { apiClient } from '../api/client';
+import { apiClient, SERVER_UNAVAILABLE_MESSAGE } from '../api/client';
+import { SLOW_SERVER_MESSAGE } from '../components/ui';
 import { authApi } from '../api/auth';
 import { lojaApi } from '../api/loja';
 
@@ -158,6 +159,41 @@ describe('Fluxo de autenticação', () => {
 
     expect(await screen.findByRole('heading', { name: 'Entrar' })).toBeInTheDocument();
     expect(screen.queryByText('Tela de membros')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['504 do gateway', apiError(504)],
+    ['timeout', { isAxiosError: true, code: 'ECONNABORTED', response: undefined }],
+  ])('%s no login mostra "servidor indisponível" e permite tentar de novo', async (_, erro) => {
+    vi.mocked(authApi.login).mockRejectedValue(erro);
+
+    renderApp('/login');
+    await preencherEEntrar();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(SERVER_UNAVAILABLE_MESSAGE);
+    expect(authApi.login).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Entrar' })).toBeEnabled();
+  });
+
+  it('checagem de sessão lenta avisa que o servidor está iniciando e o aviso some ao concluir', async () => {
+    vi.useFakeTimers();
+    try {
+      let responder!: (valor: typeof me) => void;
+      vi.mocked(authApi.me).mockReturnValue(new Promise((resolve) => (responder = resolve)));
+
+      renderApp('/');
+      expect(screen.getByText('Verificando sessão...')).toBeInTheDocument();
+      expect(screen.queryByText(SLOW_SERVER_MESSAGE)).not.toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(4_000));
+      expect(screen.getByText(SLOW_SERVER_MESSAGE)).toBeInTheDocument();
+
+      await act(async () => responder(me));
+      expect(screen.getByText('Tela inicial')).toBeInTheDocument();
+      expect(screen.queryByText(SLOW_SERVER_MESSAGE)).not.toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('falha de rede ao validar a sessão mostra erro com opção de tentar novamente', async () => {

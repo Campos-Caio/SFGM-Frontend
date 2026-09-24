@@ -1,7 +1,14 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { LogIn } from 'lucide-react';
-import { Alert, Button, FormField, Input, LoadingState } from '../../components/ui';
+import {
+  Alert,
+  Button,
+  FormField,
+  Input,
+  LoadingState,
+  SlowServerNotice,
+} from '../../components/ui';
 import { extractErrorMessage } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import type { LoginRedirectState } from '../../auth/RequireAuth';
@@ -50,7 +57,10 @@ export default function LoginPage() {
         <section className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <h1 className="mb-4 text-base font-semibold text-slate-900">Entrar</h1>
           {status === 'checking' ? (
-            <LoadingState message="Verificando sessão..." />
+            <>
+              <LoadingState message="Verificando sessão..." />
+              <SlowServerNotice pending />
+            </>
           ) : (
             <form onSubmit={handleSubmit}>
               {error && <Alert variant="error">{error}</Alert>}
@@ -82,6 +92,7 @@ export default function LoginPage() {
               <Button type="submit" icon={LogIn} className="w-full" disabled={submitting}>
                 {submitting ? 'Entrando...' : 'Entrar'}
               </Button>
+              <SlowServerNotice pending={submitting} className="mt-3" />
             </form>
           )}
         </section>

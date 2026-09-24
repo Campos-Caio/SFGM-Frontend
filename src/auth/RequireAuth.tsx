@@ -1,5 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { Button, ErrorState, LoadingState } from '../components/ui';
+import { Button, ErrorState, LoadingState, SlowServerNotice } from '../components/ui';
 import { StoreProvider } from '../store/StoreProvider';
 import { useAuth } from './AuthContext';
 
@@ -21,6 +21,7 @@ export function RequireAuth() {
     return (
       <div className="min-h-screen bg-slate-50">
         <LoadingState message="Verificando sessão..." />
+        <SlowServerNotice pending className="px-4" />
       </div>
     );
   }

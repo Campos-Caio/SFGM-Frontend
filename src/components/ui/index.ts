@@ -19,3 +19,4 @@ export * from './PageHeader';
 export * from './StatCard';
 export * from './Input';
 export * from './Select';
+export * from './SlowServerNotice';
