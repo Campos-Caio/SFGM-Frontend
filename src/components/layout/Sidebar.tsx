@@ -3,6 +3,7 @@ import {
   Building2,
   FileBarChart,
   FileText,
+  HandCoins,
   LayoutDashboard,
   Receipt,
   Users,
@@ -34,6 +35,7 @@ const groups: NavGroup[] = [
     items: [
       { to: '/membros', label: 'Membros', icon: Users },
       { to: '/debitos', label: 'Débitos', icon: Receipt },
+      { to: '/creditos', label: 'Créditos', icon: HandCoins },
       { to: '/lancamentos', label: 'Lançamentos', icon: Wallet },
     ],
   },

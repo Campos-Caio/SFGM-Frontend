@@ -1,17 +1,27 @@
 import { apiClient } from './client';
 import type {
+  CobrancaLoja,
   DebitoMembro,
   DebitoMembroInput,
   DebitoMembroPagamentoInput,
   DebitoMembroTipo,
   DebitosPorCompetencia,
   MotivoMembroIgnorado,
+  SituacaoCompetencia,
 } from '../types/debito';
 
 export interface DebitosFiltro {
   competencia?: string;
   membro_id?: number;
   tipo?: DebitoMembroTipo;
+}
+
+/** Filtros (opcionais e combináveis) da listagem de cobranças da loja. */
+export interface CobrancasFiltro {
+  /** "YYYY-MM-01". */
+  competencia?: string;
+  situacao?: SituacaoCompetencia;
+  membro_id?: number;
 }
 
 export interface MembroJaCobrado {
@@ -60,6 +70,17 @@ export const debitosApi = {
     const { data } = await apiClient.get<DebitosPorCompetencia[]>(
       `/lojas/${lojaId}/membros/${membroId}/debitos-por-competencia`
     );
+    return data;
+  },
+  /**
+   * Cobranças (uma por membro e competência) de toda a loja, com filtros
+   * opcionais. Ordenadas por competência DESC e depois nome do membro ASC.
+   * 404 se a loja ou o membro filtrado não existir (ou for de outra loja).
+   */
+  listCobrancas: async (lojaId: number, filtro: CobrancasFiltro = {}): Promise<CobrancaLoja[]> => {
+    const { data } = await apiClient.get<CobrancaLoja[]>(`/lojas/${lojaId}/cobrancas`, {
+      params: filtro,
+    });
     return data;
   },
   /**
