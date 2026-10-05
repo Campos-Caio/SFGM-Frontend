@@ -11,6 +11,7 @@ import MembroDetailPage from '../pages/Membros/MembroDetailPage';
 import DebitosListPage from '../pages/Debitos/DebitosListPage';
 import DebitoFormPage from '../pages/Debitos/DebitoFormPage';
 import DebitoDetailPage from '../pages/Debitos/DebitoDetailPage';
+import CreditosPage from '../pages/Creditos/CreditosPage';
 import LancamentosPage from '../pages/Lancamentos/LancamentosPage';
 import LancamentoFormPage from '../pages/Lancamentos/LancamentoFormPage';
 import LancamentoDetailPage from '../pages/Lancamentos/LancamentoDetailPage';
@@ -36,6 +37,8 @@ export const router = createBrowserRouter([
 
           { path: 'debitos', element: <DebitosListPage /> },
           { path: 'debitos/:id', element: <DebitoDetailPage /> },
+
+          { path: 'creditos', element: <CreditosPage /> },
 
           { path: 'lancamentos', element: <LancamentosPage /> },
           { path: 'lancamentos/:id', element: <LancamentoDetailPage /> },

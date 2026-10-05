@@ -75,6 +75,16 @@ export interface DebitosPorCompetencia {
 }
 
 /**
+ * Item de `GET /lojas/{loja_id}/cobrancas`: a cobrança de um membro em uma
+ * competência (mesmo formato de `DebitosPorCompetencia`) mais a identificação
+ * do membro. Ordenado por competência DESC e depois `membro_nome` ASC.
+ */
+export interface CobrancaLoja extends DebitosPorCompetencia {
+  membro_id: number;
+  membro_nome: string;
+}
+
+/**
  * Corpo opcional de `POST .../cobrancas/{competencia}/pagar`. Sem corpo, o
  * servidor usa a data de hoje (fuso de MS) e nenhuma forma de pagamento.
  * Chaves vazias devem ser omitidas (não enviar null).
