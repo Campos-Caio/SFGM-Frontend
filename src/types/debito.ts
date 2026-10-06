@@ -27,15 +27,35 @@ export const SITUACAO_LABELS: Record<SituacaoCompetencia, string> = {
   PAGO: 'Pago',
 };
 
-export type FormaPagamento = 'DINHEIRO' | 'PIX' | 'TRANSFERENCIA' | 'DEPOSITO' | 'OUTRO';
+/**
+ * Forma de pagamento como vem nas respostas da API. `CREDITO` é gravada SOMENTE
+ * pelo pagamento de cobrança com o crédito do irmão (`.../pagar-com-credito`):
+ * enviá-la em qualquer payload resulta em 422. Para entrada use
+ * `FormaPagamentoEntrada` / `FORMAS_PAGAMENTO_SELECIONAVEIS`.
+ */
+export type FormaPagamento = 'DINHEIRO' | 'PIX' | 'TRANSFERENCIA' | 'DEPOSITO' | 'OUTRO' | 'CREDITO';
 
+/** Formas aceitas em payloads (todas, exceto `CREDITO`). */
+export type FormaPagamentoEntrada = Exclude<FormaPagamento, 'CREDITO'>;
+
+/** Rótulos de exibição (inclui `CREDITO`, que só aparece em respostas). */
 export const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
   DINHEIRO: 'Dinheiro',
   PIX: 'Pix',
   TRANSFERENCIA: 'Transferência',
   DEPOSITO: 'Depósito',
   OUTRO: 'Outro',
+  CREDITO: 'Crédito do irmão',
 };
+
+/** Opções dos selects de forma de pagamento (na ordem de exibição; sem `CREDITO`). */
+export const FORMAS_PAGAMENTO_SELECIONAVEIS: FormaPagamentoEntrada[] = [
+  'DINHEIRO',
+  'PIX',
+  'TRANSFERENCIA',
+  'DEPOSITO',
+  'OUTRO',
+];
 
 export interface DebitoMembro {
   id: number;
@@ -91,7 +111,16 @@ export interface CobrancaLoja extends DebitosPorCompetencia {
  */
 export interface DebitoMembroPagamentoInput {
   data_pagamento?: string;
-  forma_pagamento?: FormaPagamento;
+  forma_pagamento?: FormaPagamentoEntrada;
+}
+
+/**
+ * Corpo opcional de `POST .../cobrancas/{competencia}/pagar-com-credito`. Sem
+ * `data_pagamento`, o servidor usa hoje (fuso de MS). A forma gravada é sempre
+ * `CREDITO` (não é enviada).
+ */
+export interface PagarComCreditoInput {
+  data_pagamento?: string;
 }
 
 /**

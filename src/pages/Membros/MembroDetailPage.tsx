@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Eye, Pencil, Power, PowerOff } from 'lucide-react';
 import { membrosApi } from '../../api/membros';
+import { creditosMembroApi } from '../../api/creditosMembro';
 import { extractErrorMessage } from '../../api/client';
 import {
   Alert,
@@ -15,6 +16,8 @@ import {
 } from '../../components/ui';
 import { SkeletonCard } from '../../components/ui/Skeleton';
 import type { Membro } from '../../types/membro';
+import type { SaldoMembro } from '../../types/creditoMembro';
+import CreditoMembroSection from './CreditoMembroSection';
 import DebitosPorCompetenciaSection from './DebitosPorCompetenciaSection';
 
 const SUCCESS_MESSAGES: Record<string, string> = {
@@ -47,6 +50,36 @@ export default function MembroDetailPage() {
   }
 
   useEffect(load, [id]);
+
+  // Saldo do irmão: carregado aqui porque é compartilhado pelas seções de
+  // crédito e de cobranças. `versaoFinanceiro` muda a cada ação financeira da
+  // ficha e recarrega saldo, extrato e cobranças. A falha do saldo fica
+  // isolada na seção (não derruba a ficha).
+  const [versaoFinanceiro, setVersaoFinanceiro] = useState(0);
+  const [saldo, setSaldo] = useState<SaldoMembro | null>(null);
+  const [saldoError, setSaldoError] = useState<string | null>(null);
+  const lojaId = membro?.loja_id;
+  const membroId = membro?.id;
+
+  useEffect(() => {
+    if (lojaId === undefined || membroId === undefined) return;
+    let active = true;
+    creditosMembroApi
+      .getSaldo(lojaId, membroId)
+      .then((data) => {
+        if (!active) return;
+        setSaldo(data);
+        setSaldoError(null);
+      })
+      .catch((err) => {
+        if (active) setSaldoError(extractErrorMessage(err));
+      });
+    return () => {
+      active = false;
+    };
+  }, [lojaId, membroId, versaoFinanceiro]);
+
+  const recarregarFinanceiro = useCallback(() => setVersaoFinanceiro((v) => v + 1), []);
 
   async function handleToggleStatus() {
     if (!membro) return;
@@ -128,7 +161,25 @@ export default function MembroDetailPage() {
         </div>
       </Card>
 
-      <DebitosPorCompetenciaSection key={membro.id} lojaId={membro.loja_id} membroId={membro.id} />
+      <CreditoMembroSection
+        key={`credito-${membro.id}`}
+        lojaId={membro.loja_id}
+        membro={membro}
+        saldo={saldo}
+        saldoError={saldoError}
+        onRetrySaldo={recarregarFinanceiro}
+        onAlterado={recarregarFinanceiro}
+        versao={versaoFinanceiro}
+      />
+
+      <DebitosPorCompetenciaSection
+        key={membro.id}
+        lojaId={membro.loja_id}
+        membroId={membro.id}
+        creditoDisponivel={saldo?.total_credito ?? null}
+        versao={versaoFinanceiro}
+        onAlterado={recarregarFinanceiro}
+      />
     </>
   );
 }

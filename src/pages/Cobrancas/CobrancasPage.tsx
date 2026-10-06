@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import axios from 'axios';
-import { CheckCircle2, ChevronDown, ChevronRight, Filter, HandCoins, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Filter, HandCoins, Undo2, X } from 'lucide-react';
 import { debitosApi, type CobrancasFiltro } from '../../api/debitos';
 import { membrosApi } from '../../api/membros';
 import { extractErrorMessage } from '../../api/client';
@@ -38,6 +38,7 @@ import {
   monthInputToCompetencia,
 } from '../../utils/formatters';
 import { somarValores } from '../../utils/money';
+import DesfazerPagamentoDialog from '../Membros/DesfazerPagamentoDialog';
 import PagarCobrancaDialog from '../Membros/PagarCobrancaDialog';
 
 /** Situação do filtro: "" = Todas (não envia o parâmetro). PARCIAL só aparece em Todas. */
@@ -70,11 +71,11 @@ function cobrancaKey(c: CobrancaLoja): string {
 }
 
 /**
- * Tela "Créditos" (tesouraria): cobranças de todos os irmãos da loja (uma por
+ * Tela "Cobranças" (tesouraria): cobranças de todos os irmãos da loja (uma por
  * irmão e competência), com filtros e baixa da cobrança inteira. Situação e
  * totais vêm do servidor; a soma exibida na página é apenas informativa.
  */
-export default function CreditosPage() {
+export default function CobrancasPage() {
   const { loja, loading: loadingLoja, error: lojaError } = useCurrentStore();
   const canPagar = useCanPagarDebito();
   const [membros, setMembros] = useState<Membro[]>([]);
@@ -94,6 +95,9 @@ export default function CreditosPage() {
   const [pagarAlvo, setPagarAlvo] = useState<CobrancaLoja | null>(null);
   const [pagando, setPagando] = useState(false);
   const [pagarError, setPagarError] = useState<string | null>(null);
+  const [desfazerAlvo, setDesfazerAlvo] = useState<CobrancaLoja | null>(null);
+  const [desfazendo, setDesfazendo] = useState(false);
+  const [desfazerError, setDesfazerError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ variant: 'success' | 'error'; texto: string } | null>(
     null
   );
@@ -205,6 +209,55 @@ export default function CreditosPage() {
     }
   }
 
+  function abrirDesfazer(cobranca: CobrancaLoja) {
+    setDesfazerError(null);
+    setFeedback(null);
+    setDesfazerAlvo(cobranca);
+  }
+
+  async function handleConfirmarDesfazer() {
+    if (!loja || !desfazerAlvo || desfazendo) return;
+    const alvo = desfazerAlvo;
+    setDesfazendo(true);
+    setDesfazerError(null);
+    try {
+      const resposta = await debitosApi.desfazerPagamentoCobranca(
+        loja.id,
+        alvo.membro_id,
+        alvo.competencia
+      );
+      // A resposta não traz o membro: preserva a identificação do item.
+      const atualizada: CobrancaLoja = {
+        ...resposta,
+        membro_id: alvo.membro_id,
+        membro_nome: alvo.membro_nome,
+      };
+      const key = cobrancaKey(alvo);
+      const saiDoFiltro = aplicados.situacao !== '' && atualizada.situacao !== aplicados.situacao;
+      setDesfazerAlvo(null);
+      setFeedback({
+        variant: 'success',
+        texto: `Pagamento da cobrança de ${alvo.membro_nome} de ${formatCompetenciaExtenso(alvo.competencia)} desfeito.`,
+      });
+      setCobrancas((atual) => {
+        if (!atual) return atual;
+        return saiDoFiltro
+          ? atual.filter((c) => cobrancaKey(c) !== key)
+          : atual.map((c) => (cobrancaKey(c) === key ? atualizada : c));
+      });
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        setDesfazerAlvo(null);
+        setFeedback({ variant: 'error', texto: extractErrorMessage(err) });
+        buscar(aplicados);
+      } else {
+        setDesfazerError(extractErrorMessage(err));
+      }
+    } finally {
+      setDesfazendo(false);
+    }
+  }
+
   function mensagemVazio(): string {
     let texto = 'Nenhuma cobrança';
     if (aplicados.situacao === 'ABERTO') texto += ' em aberto';
@@ -220,7 +273,7 @@ export default function CreditosPage() {
   if (loadingLoja) {
     return (
       <>
-        <PageHeader title="Créditos" />
+        <PageHeader title="Cobranças" />
         <SkeletonTable columns={4} />
       </>
     );
@@ -229,7 +282,7 @@ export default function CreditosPage() {
   if (lojaError) {
     return (
       <>
-        <PageHeader title="Créditos" />
+        <PageHeader title="Cobranças" />
         <ErrorState message={lojaError} />
       </>
     );
@@ -238,8 +291,8 @@ export default function CreditosPage() {
   if (!loja) {
     return (
       <>
-        <PageHeader title="Créditos" />
-        <SemLojaState icon={HandCoins} description="Cadastre a loja antes de gerenciar créditos." />
+        <PageHeader title="Cobranças" />
+        <SemLojaState icon={HandCoins} description="Cadastre a loja antes de gerenciar cobranças." />
       </>
     );
   }
@@ -253,7 +306,7 @@ export default function CreditosPage() {
 
   return (
     <>
-      <PageHeader title="Créditos" description="Cobranças dos irmãos a receber." />
+      <PageHeader title="Cobranças" description="Cobranças dos irmãos a receber." />
 
       {feedback && <Alert variant={feedback.variant}>{feedback.texto}</Alert>}
 
@@ -383,6 +436,17 @@ export default function CreditosPage() {
                             Marcar como paga
                           </Button>
                         )}
+                        {canPagar && c.situacao !== 'ABERTO' && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            icon={Undo2}
+                            onClick={() => abrirDesfazer(c)}
+                            aria-label={`Desfazer o pagamento da cobrança de ${c.membro_nome} de ${mes}`}
+                          >
+                            Desfazer pagamento
+                          </Button>
+                        )}
                       </div>
                     </div>
                     <div id={panelId} hidden={!aberta} className="mt-3">
@@ -431,6 +495,18 @@ export default function CreditosPage() {
           error={pagarError}
           onConfirm={handleConfirmarPagamento}
           onClose={() => setPagarAlvo(null)}
+        />
+      )}
+
+      {desfazerAlvo && (
+        <DesfazerPagamentoDialog
+          key={cobrancaKey(desfazerAlvo)}
+          cobranca={desfazerAlvo}
+          membroNome={desfazerAlvo.membro_nome}
+          submitting={desfazendo}
+          error={desfazerError}
+          onConfirm={handleConfirmarDesfazer}
+          onClose={() => setDesfazerAlvo(null)}
         />
       )}
     </>

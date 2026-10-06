@@ -17,6 +17,7 @@ import {
   FilterField,
   Input,
   LinkButton,
+  OrigemLancamentoBadge,
   PageHeader,
   Select,
   StatCard,
@@ -201,9 +202,12 @@ export default function LancamentosPage() {
             {
               header: 'Tipo',
               render: (l) => (
-                <Badge variant={l.tipo === 'RECEITA' ? 'success' : 'danger'}>
-                  {l.tipo === 'RECEITA' ? 'Receita' : 'Despesa'}
-                </Badge>
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <Badge variant={l.tipo === 'RECEITA' ? 'success' : 'danger'}>
+                    {l.tipo === 'RECEITA' ? 'Receita' : 'Despesa'}
+                  </Badge>
+                  <OrigemLancamentoBadge origem={l.origem} />
+                </span>
               ),
             },
             { header: 'Categoria', render: (l) => l.categoria },
@@ -217,9 +221,12 @@ export default function LancamentosPage() {
                   <LinkButton to={`/lancamentos/${l.id}`} variant="secondary" size="sm" icon={Eye}>
                     Ver
                   </LinkButton>
-                  <LinkButton to={`/lancamentos/${l.id}/editar`} variant="secondary" size="sm" icon={Pencil}>
-                    Editar
-                  </LinkButton>
+                  {/* Lançamento automático não é editável (o servidor responde 409). */}
+                  {l.origem === 'MANUAL' && (
+                    <LinkButton to={`/lancamentos/${l.id}/editar`} variant="secondary" size="sm" icon={Pencil}>
+                      Editar
+                    </LinkButton>
+                  )}
                 </div>
               ),
             },

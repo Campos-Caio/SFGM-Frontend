@@ -1,4 +1,4 @@
-import { createBrowserRouter } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
 import { AppLayout } from '../components/layout/AppLayout';
 import { RequireAuth } from '../auth/RequireAuth';
 import { RequireLoja } from '../store/RequireLoja';
@@ -11,11 +11,13 @@ import MembroDetailPage from '../pages/Membros/MembroDetailPage';
 import DebitosListPage from '../pages/Debitos/DebitosListPage';
 import DebitoFormPage from '../pages/Debitos/DebitoFormPage';
 import DebitoDetailPage from '../pages/Debitos/DebitoDetailPage';
-import CreditosPage from '../pages/Creditos/CreditosPage';
+import CobrancasPage from '../pages/Cobrancas/CobrancasPage';
+import SaldosPage from '../pages/Saldos/SaldosPage';
 import LancamentosPage from '../pages/Lancamentos/LancamentosPage';
 import LancamentoFormPage from '../pages/Lancamentos/LancamentoFormPage';
 import LancamentoDetailPage from '../pages/Lancamentos/LancamentoDetailPage';
 import PrestacaoContasPage from '../pages/PrestacaoContas/PrestacaoContasPage';
+import CaixaPage from '../pages/Caixa/CaixaPage';
 import DocumentosPage from '../pages/Documentos/DocumentosPage';
 
 export const router = createBrowserRouter([
@@ -38,10 +40,16 @@ export const router = createBrowserRouter([
           { path: 'debitos', element: <DebitosListPage /> },
           { path: 'debitos/:id', element: <DebitoDetailPage /> },
 
-          { path: 'creditos', element: <CreditosPage /> },
+          { path: 'cobrancas', element: <CobrancasPage /> },
+          // Endereço antigo da tela de cobranças (a aba se chamava "Créditos").
+          { path: 'creditos', element: <Navigate to="/cobrancas" replace /> },
+
+          { path: 'saldos', element: <SaldosPage /> },
 
           { path: 'lancamentos', element: <LancamentosPage /> },
           { path: 'lancamentos/:id', element: <LancamentoDetailPage /> },
+
+          { path: 'caixa', element: <CaixaPage /> },
 
           { path: 'prestacao-contas', element: <PrestacaoContasPage /> },
 

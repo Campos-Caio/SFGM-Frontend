@@ -12,10 +12,11 @@ import {
   DescriptionList,
   ErrorState,
   LinkButton,
+  OrigemLancamentoBadge,
   PageHeader,
 } from '../../components/ui';
 import { SkeletonCard } from '../../components/ui/Skeleton';
-import type { Lancamento } from '../../types/lancamento';
+import { LANCAMENTO_ORIGEM_ORIENTACAO, type Lancamento } from '../../types/lancamento';
 import { formatCurrency, formatDataBr, formatMesAno } from '../../utils/formatters';
 
 const SUCCESS_MESSAGES: Record<string, string> = {
@@ -88,9 +89,16 @@ export default function LancamentoDetailPage() {
     );
   }
 
+  // Lançamento automático não é editado nem excluído avulso (o servidor
+  // responde 409; o tratamento do erro abaixo continua como rede de segurança).
+  const manual = lancamento.origem === 'MANUAL';
+
   return (
     <>
       <PageHeader title="Lançamento" />
+      {lancamento.origem !== 'MANUAL' && (
+        <Alert variant="info">{LANCAMENTO_ORIGEM_ORIENTACAO[lancamento.origem]}</Alert>
+      )}
       {successKey && SUCCESS_MESSAGES[successKey] && (
         <Alert variant="success">{SUCCESS_MESSAGES[successKey]}</Alert>
       )}
@@ -102,9 +110,12 @@ export default function LancamentoDetailPage() {
             {
               label: 'Tipo',
               value: (
-                <Badge variant={lancamento.tipo === 'RECEITA' ? 'success' : 'danger'}>
-                  {lancamento.tipo === 'RECEITA' ? 'Receita' : 'Despesa'}
-                </Badge>
+                <span className="inline-flex flex-wrap items-center gap-2">
+                  <Badge variant={lancamento.tipo === 'RECEITA' ? 'success' : 'danger'}>
+                    {lancamento.tipo === 'RECEITA' ? 'Receita' : 'Despesa'}
+                  </Badge>
+                  <OrigemLancamentoBadge origem={lancamento.origem} />
+                </span>
               ),
             },
             { label: 'Categoria', value: lancamento.categoria },
@@ -116,12 +127,16 @@ export default function LancamentoDetailPage() {
           ]}
         />
         <div className="flex gap-3">
-          <LinkButton to={`/lancamentos/${lancamento.id}/editar`} icon={Pencil}>
-            Editar
-          </LinkButton>
-          <Button variant="danger" icon={Trash2} onClick={() => setConfirmOpen(true)}>
-            Excluir
-          </Button>
+          {manual && (
+            <>
+              <LinkButton to={`/lancamentos/${lancamento.id}/editar`} icon={Pencil}>
+                Editar
+              </LinkButton>
+              <Button variant="danger" icon={Trash2} onClick={() => setConfirmOpen(true)}>
+                Excluir
+              </Button>
+            </>
+          )}
           <LinkButton
             to="/lancamentos"
             state={{ competencia: lancamento.competencia }}
