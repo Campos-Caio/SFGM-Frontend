@@ -3,9 +3,10 @@ import { CheckCircle2 } from 'lucide-react';
 import { Alert, Button, FormField, Input, Modal, Select } from '../../components/ui';
 import {
   FORMA_PAGAMENTO_LABELS,
+  FORMAS_PAGAMENTO_SELECIONAVEIS,
   type DebitoMembroPagamentoInput,
   type DebitosPorCompetencia,
-  type FormaPagamento,
+  type FormaPagamentoEntrada,
 } from '../../types/debito';
 import { todayBusinessDate } from '../../utils/businessTime';
 import { formatCompetenciaExtenso, formatCurrency } from '../../utils/formatters';
@@ -34,7 +35,7 @@ export default function PagarCobrancaDialog({
 }: PagarCobrancaDialogProps) {
   const hoje = todayBusinessDate();
   const [dataPagamento, setDataPagamento] = useState(hoje);
-  const [forma, setForma] = useState<FormaPagamento | ''>('');
+  const [forma, setForma] = useState<FormaPagamentoEntrada | ''>('');
   const [dataError, setDataError] = useState<string | null>(null);
 
   const titulo = `Cobrança de ${formatCompetenciaExtenso(cobranca.competencia)}`;
@@ -78,7 +79,8 @@ export default function PagarCobrancaDialog({
       }
     >
       <p className="m-0 mb-3 text-slate-500">
-        Todos os débitos desta cobrança serão marcados como pagos. Esta ação não pode ser desfeita.
+        Todos os débitos desta cobrança serão marcados como pagos. Se o pagamento for registrado por
+        engano, ele pode ser desfeito depois em &quot;Desfazer pagamento&quot;.
       </p>
       <FormField label="Data do pagamento" htmlFor="pagamento_data" error={dataError ?? undefined}>
         <Input
@@ -94,13 +96,13 @@ export default function PagarCobrancaDialog({
         <Select
           id="pagamento_forma"
           value={forma}
-          onChange={(e) => setForma(e.target.value as FormaPagamento | '')}
+          onChange={(e) => setForma(e.target.value as FormaPagamentoEntrada | '')}
           disabled={submitting}
         >
           <option value="">Não informar</option>
-          {Object.entries(FORMA_PAGAMENTO_LABELS).map(([value, label]) => (
+          {FORMAS_PAGAMENTO_SELECIONAVEIS.map((value) => (
             <option key={value} value={value}>
-              {label}
+              {FORMA_PAGAMENTO_LABELS[value]}
             </option>
           ))}
         </Select>

@@ -64,3 +64,31 @@ describe('Navegação principal (Sidebar + AppLayout)', () => {
     expect(screen.queryByText('Conteúdo da tela Loja')).not.toBeInTheDocument();
   });
 });
+
+describe('Sidebar — tesouraria', () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(lojaApi.list).mockResolvedValue([loja]);
+    vi.mocked(authApi.me).mockResolvedValue({ id: 1, login: 't', nome: 'Tesoureiro', csrf_token: 'c' });
+  });
+
+  it('tem "Cobranças" (/cobrancas) e "Saldos dos irmãos" (/saldos), sem a antiga aba "Créditos"', () => {
+    render(
+      <AuthProvider>
+        <StoreProvider>
+          <MemoryRouter initialEntries={['/loja']}>
+            <Routes>
+              <Route element={<AppLayout />}>
+                <Route path="/loja" element={<div>Conteúdo da tela Loja</div>} />
+              </Route>
+            </Routes>
+          </MemoryRouter>
+        </StoreProvider>
+      </AuthProvider>
+    );
+
+    expect(screen.getByRole('link', { name: 'Cobranças' })).toHaveAttribute('href', '/cobrancas');
+    expect(screen.getByRole('link', { name: 'Saldos dos irmãos' })).toHaveAttribute('href', '/saldos');
+    expect(screen.queryByRole('link', { name: 'Créditos' })).not.toBeInTheDocument();
+  });
+});

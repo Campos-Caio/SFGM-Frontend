@@ -7,6 +7,7 @@ import type {
   DebitoMembroTipo,
   DebitosPorCompetencia,
   MotivoMembroIgnorado,
+  PagarComCreditoInput,
   SituacaoCompetencia,
 } from '../types/debito';
 
@@ -99,6 +100,42 @@ export const debitosApi = {
     const { data } = await apiClient.post<DebitosPorCompetencia>(
       `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/pagar`,
       input
+    );
+    return data;
+  },
+  /**
+   * Quita a cobrança inteira usando o crédito adiantado do irmão (forma
+   * `CREDITO`, sem gerar receita nova: o dinheiro entrou quando o crédito foi
+   * registrado). Corpo opcional (sem data, o servidor usa hoje em MS). 409 se
+   * o crédito disponível não cobrir todo o valor em aberto (nada é alterado).
+   * Devolve a cobrança já atualizada (mesmo formato de `pagarCobranca`).
+   */
+  pagarCobrancaComCredito: async (
+    lojaId: number,
+    membroId: number,
+    competencia: string,
+    input: PagarComCreditoInput = {}
+  ): Promise<DebitosPorCompetencia> => {
+    const { data } = await apiClient.post<DebitosPorCompetencia>(
+      `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/pagar-com-credito`,
+      input
+    );
+    return data;
+  },
+  /**
+   * Desfaz a baixa da cobrança (corrige um pagamento registrado por engano):
+   * remove os lançamentos de receita gerados pela baixa (com auditoria) e volta
+   * todos os débitos do mês para "em aberto". Se a cobrança foi paga com
+   * crédito, o crédito usado volta a ficar disponível para o irmão. Idempotente: cobrança sem débito
+   * pago retorna 200 sem alterar nada. Devolve a cobrança já atualizada.
+   */
+  desfazerPagamentoCobranca: async (
+    lojaId: number,
+    membroId: number,
+    competencia: string
+  ): Promise<DebitosPorCompetencia> => {
+    const { data } = await apiClient.post<DebitosPorCompetencia>(
+      `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/desfazer-pagamento`
     );
     return data;
   },

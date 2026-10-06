@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import CreditosPage from './CreditosPage';
+import CobrancasPage from './CobrancasPage';
 import { lojaApi } from '../../api/loja';
 import { membrosApi } from '../../api/membros';
 import { debitosApi } from '../../api/debitos';
@@ -107,9 +107,9 @@ const alicePaga: DebitosPorCompetencia = {
 function renderPage() {
   return render(
     <StoreProvider>
-      <MemoryRouter initialEntries={['/creditos']}>
+      <MemoryRouter initialEntries={['/cobrancas']}>
         <Routes>
-          <Route path="/creditos" element={<CreditosPage />} />
+          <Route path="/cobrancas" element={<CobrancasPage />} />
         </Routes>
       </MemoryRouter>
     </StoreProvider>
@@ -120,7 +120,7 @@ function cardDe(nome: string): HTMLElement {
   return screen.getByRole('region', { name: new RegExp(nome) });
 }
 
-describe('CreditosPage', () => {
+describe('CobrancasPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     // 2026-10-01T02:30Z = 30/09/2026 22:30 em MS: o mês padrão é setembro (fuso de negócio).
@@ -386,7 +386,7 @@ describe('CreditosPage', () => {
     renderPage();
 
     await waitFor(() => expect(lojaApi.list).toHaveBeenCalled());
-    expect(await screen.findByText('Cadastre a loja antes de gerenciar créditos.')).toBeInTheDocument();
+    expect(await screen.findByText('Cadastre a loja antes de gerenciar cobranças.')).toBeInTheDocument();
     expect(debitosApi.listCobrancas).not.toHaveBeenCalled();
   });
 });
