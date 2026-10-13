@@ -27,10 +27,11 @@ import {
   DEBITO_TIPO_LABELS,
   type CobrancaLoja,
   type DebitoMembroPagamentoInput,
+  type ModoDesfazerPagamento,
 } from '../../types/debito';
 import type { Membro } from '../../types/membro';
 import { currentMonthInput } from '../../utils/businessTime';
-import { pagamentoInfo } from '../../utils/cobrancas';
+import { mensagemModoDesfeito, pagamentoInfo } from '../../utils/cobrancas';
 import {
   formatCompetenciaExtenso,
   formatCurrency,
@@ -180,13 +181,19 @@ export default function CobrancasPage() {
         ...resposta,
         membro_id: alvo.membro_id,
         membro_nome: alvo.membro_nome,
+        membro_status: alvo.membro_status,
       };
       const key = cobrancaKey(alvo);
       const saiDoFiltro = aplicados.situacao !== '' && atualizada.situacao !== aplicados.situacao;
+      const excedente = atualizada.pagamento_excedente;
       setPagarAlvo(null);
       setFeedback({
         variant: 'success',
-        texto: `Cobrança de ${alvo.membro_nome} de ${formatCompetenciaExtenso(alvo.competencia)} marcada como paga.`,
+        texto:
+          `Cobrança de ${alvo.membro_nome} de ${formatCompetenciaExtenso(alvo.competencia)} marcada como paga.` +
+          (excedente
+            ? ` ${formatCurrency(excedente.valor_excedente)} ficaram como crédito do irmão.`
+            : ''),
       });
       setCobrancas((atual) => {
         if (!atual) return atual;
@@ -201,7 +208,8 @@ export default function CobrancasPage() {
         setFeedback({ variant: 'error', texto: extractErrorMessage(err) });
         buscar(aplicados);
       } else {
-        // 422, 500 e rede: mantém o diálogo aberto com a mensagem.
+        // 409 (valor recebido menor que o em aberto, irmão inativo com
+        // excedente), 422, 500 e rede: mantém o diálogo aberto com a mensagem.
         setPagarError(extractErrorMessage(err));
       }
     } finally {
@@ -215,29 +223,31 @@ export default function CobrancasPage() {
     setDesfazerAlvo(cobranca);
   }
 
-  async function handleConfirmarDesfazer() {
+  async function handleConfirmarDesfazer(modo?: ModoDesfazerPagamento) {
     if (!loja || !desfazerAlvo || desfazendo) return;
     const alvo = desfazerAlvo;
     setDesfazendo(true);
     setDesfazerError(null);
     try {
-      const resposta = await debitosApi.desfazerPagamentoCobranca(
-        loja.id,
-        alvo.membro_id,
-        alvo.competencia
-      );
+      // `modo` só vem na baixa com excedente; sem ele, nenhum corpo é enviado.
+      const resposta = modo
+        ? await debitosApi.desfazerPagamentoCobranca(loja.id, alvo.membro_id, alvo.competencia, modo)
+        : await debitosApi.desfazerPagamentoCobranca(loja.id, alvo.membro_id, alvo.competencia);
       // A resposta não traz o membro: preserva a identificação do item.
       const atualizada: CobrancaLoja = {
         ...resposta,
         membro_id: alvo.membro_id,
         membro_nome: alvo.membro_nome,
+        membro_status: alvo.membro_status,
       };
       const key = cobrancaKey(alvo);
       const saiDoFiltro = aplicados.situacao !== '' && atualizada.situacao !== aplicados.situacao;
       setDesfazerAlvo(null);
       setFeedback({
         variant: 'success',
-        texto: `Pagamento da cobrança de ${alvo.membro_nome} de ${formatCompetenciaExtenso(alvo.competencia)} desfeito.`,
+        texto:
+          `Pagamento da cobrança de ${alvo.membro_nome} de ${formatCompetenciaExtenso(alvo.competencia)} desfeito.` +
+          mensagemModoDesfeito(modo),
       });
       setCobrancas((atual) => {
         if (!atual) return atual;
@@ -251,6 +261,7 @@ export default function CobrancasPage() {
         setFeedback({ variant: 'error', texto: extractErrorMessage(err) });
         buscar(aplicados);
       } else {
+        // 409 (ex.: "cancelar tudo" bloqueado), 500 e rede: mantém o diálogo aberto.
         setDesfazerError(extractErrorMessage(err));
       }
     } finally {
@@ -491,6 +502,7 @@ export default function CobrancasPage() {
         <PagarCobrancaDialog
           key={cobrancaKey(pagarAlvo)}
           cobranca={pagarAlvo}
+          membroInativo={pagarAlvo.membro_status === 'INATIVO'}
           submitting={pagando}
           error={pagarError}
           onConfirm={handleConfirmarPagamento}

@@ -1,4 +1,8 @@
-import { FORMA_PAGAMENTO_LABELS, type DebitosPorCompetencia } from '../types/debito';
+import {
+  FORMA_PAGAMENTO_LABELS,
+  type DebitosPorCompetencia,
+  type ModoDesfazerPagamento,
+} from '../types/debito';
 import { businessDateFromTimestamp, formatDateTimeBr } from './businessTime';
 import { formatDataBr } from './formatters';
 
@@ -33,4 +37,14 @@ export function pagamentoInfo(
     texto: partes.join(' · '),
     registradoEm: ref.pago_em ? formatDateTimeBr(ref.pago_em) : undefined,
   };
+}
+
+/**
+ * Complemento da mensagem de sucesso de "Desfazer pagamento" numa baixa com
+ * excedente, conforme o modo escolhido ("" quando não havia excedente).
+ */
+export function mensagemModoDesfeito(modo?: ModoDesfazerPagamento): string {
+  if (modo === 'CANCELAR_TUDO') return ' A entrada de crédito e a receita dela foram excluídas.';
+  if (modo === 'SOMENTE_PAGAMENTO') return ' O valor recebido continua como crédito do irmão.';
+  return '';
 }

@@ -69,6 +69,7 @@ const cobrancaSetembro: DebitosPorCompetencia = {
   total: '180.00',
   total_em_aberto: '180.00',
   debitos: [debitoMensalidade, debitoMutua],
+  pagamento_excedente: null,
 };
 const cobrancaAgosto: DebitosPorCompetencia = {
   competencia: '2026-08-01',
@@ -76,6 +77,7 @@ const cobrancaAgosto: DebitosPorCompetencia = {
   total: '100.00',
   total_em_aberto: '0.00',
   debitos: [debitoAgostoPago],
+  pagamento_excedente: null,
 };
 const cobrancas: DebitosPorCompetencia[] = [cobrancaSetembro, cobrancaAgosto];
 
@@ -92,6 +94,7 @@ const cobrancaSetembroPaga: DebitosPorCompetencia = {
     data_pagamento: '2026-09-21',
     forma_pagamento: 'PIX' as const,
   })),
+  pagamento_excedente: null,
 };
 
 const saldoEmDia: SaldoMembro = {
@@ -185,6 +188,7 @@ describe('MembroDetailPage — cobranças por competência', () => {
         situacao: 'PARCIAL',
         total: '150.00',
         total_em_aberto: '50.00',
+        pagamento_excedente: null,
         debitos: [
           debitoBase({
             id: 31,
@@ -527,6 +531,8 @@ describe('MembroDetailPage — saldo e crédito do irmão', () => {
     observacao: 'Adiantamento',
     created_at: '2026-08-10T12:00:00Z',
     competencia_quitada: null,
+    entrada_origem_id: null,
+    competencia_cobranca_vinculada: null,
   };
   const utilizacao: MovimentoCredito = {
     id: 72,
@@ -539,6 +545,8 @@ describe('MembroDetailPage — saldo e crédito do irmão', () => {
     observacao: null,
     created_at: '2026-08-20T12:00:00Z',
     competencia_quitada: '2026-08-01',
+    entrada_origem_id: null,
+    competencia_cobranca_vinculada: null,
   };
 
   beforeEach(() => {
@@ -637,6 +645,7 @@ describe('MembroDetailPage — saldo e crédito do irmão', () => {
         total: '150.00',
         total_em_aberto: '150.00',
         debitos: [debitoBase({ id: 41, competencia: '2026-10-01' })],
+        pagamento_excedente: null,
       },
       ...cobrancas,
     ]);
@@ -663,6 +672,8 @@ describe('MembroDetailPage — registrar e excluir crédito', () => {
     observacao: null,
     created_at: '2026-08-10T12:00:00Z',
     competencia_quitada: null,
+    entrada_origem_id: null,
+    competencia_cobranca_vinculada: null,
   };
   const utilizacao: MovimentoCredito = {
     ...entrada,
@@ -1018,5 +1029,366 @@ describe('MembroDetailPage — pagar com crédito e desfazer', () => {
       within(dialog).getByText(/Os lançamentos de receita gerados por esse pagamento serão excluídos/)
     ).toBeInTheDocument();
     expect(within(dialog).queryByText(/volta para o irmão/)).not.toBeInTheDocument();
+    // Sem excedente, o diálogo é o de sempre: nenhuma escolha de modo.
+    expect(within(dialog).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
+  });
+});
+
+describe('MembroDetailPage — baixa com pagamento a mais (excedente)', () => {
+  // 2026-09-21T15:00Z = 21/09/2026 11:00 em MS.
+  const AGORA = new Date('2026-09-21T15:00:00Z');
+  /** Resposta do servidor: setembro (R$ 180) quitado com R$ 600 recebidos. */
+  const setembroComExcedente: DebitosPorCompetencia = {
+    ...cobrancaSetembroPaga,
+    debitos: cobrancaSetembroPaga.debitos.map((d) => ({
+      ...d,
+      forma_pagamento: 'CREDITO' as const,
+    })),
+    pagamento_excedente: {
+      movimento_credito_id: 90,
+      valor_recebido: '600.00',
+      valor_excedente: '420.00',
+      pode_cancelar_tudo: true,
+      motivo_bloqueio: null,
+    },
+  };
+  const conflito = (detail: string) => ({
+    isAxiosError: true,
+    response: { status: 409, data: { detail } },
+  });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(AGORA);
+    vi.resetAllMocks();
+    vi.mocked(useCanPagarDebito).mockReturnValue(true);
+    vi.mocked(membrosApi.get).mockResolvedValue(membro);
+    vi.mocked(debitosApi.listPorCompetencia).mockResolvedValue(cobrancas);
+    mockFinanceiroPadrao();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function abrirPagamentoDeSetembro(user: ReturnType<typeof userEvent.setup>) {
+    const setembro = await screen.findByRole('region', { name: 'Cobrança de Setembro/2026' });
+    await user.click(within(setembro).getByRole('button', { name: 'Marcar cobrança como paga' }));
+    return screen.findByRole('dialog');
+  }
+
+  async function abrirDesfazerDeSetembro(user: ReturnType<typeof userEvent.setup>) {
+    const setembro = await screen.findByRole('region', { name: 'Cobrança de Setembro/2026' });
+    await user.click(within(setembro).getByRole('button', { name: 'Desfazer pagamento' }));
+    return screen.findByRole('dialog');
+  }
+
+  const opcaoPagouMais = (dialog: HTMLElement) =>
+    within(dialog).getByRole('checkbox', { name: 'O irmão pagou mais que o total' });
+
+  it('a opção vem fechada: sem campo de valor e, desmarcada, o corpo é o de sempre', async () => {
+    vi.mocked(debitosApi.pagarCobranca).mockResolvedValue(cobrancaSetembroPaga);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+
+    expect(opcaoPagouMais(dialog)).not.toBeChecked();
+    expect(within(dialog).getByText('A diferença fica como crédito para ele.')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/Valor recebido/)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/Categoria da receita/)).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento' }));
+    await waitFor(() =>
+      expect(debitosApi.pagarCobranca).toHaveBeenCalledWith(1, 5, '2026-09-01', {
+        data_pagamento: '2026-09-21',
+      })
+    );
+    expect(await screen.findByText('Cobrança de Setembro/2026 marcada como paga.')).toBeInTheDocument();
+  });
+
+  it('com valor maior mostra o resumo, muda o botão, envia valor e categoria e recarrega saldo e extrato', async () => {
+    vi.mocked(debitosApi.pagarCobranca).mockResolvedValue(setembroComExcedente);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+
+    await user.click(opcaoPagouMais(dialog));
+    expect(within(dialog).getByLabelText(/Categoria da receita/)).toHaveValue('Mensalidade');
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '600');
+
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      /Cobrança R\$\s180,00 · Crédito do irmão R\$\s420,00/
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento e crédito' }));
+
+    await waitFor(() =>
+      expect(debitosApi.pagarCobranca).toHaveBeenCalledWith(1, 5, '2026-09-01', {
+        data_pagamento: '2026-09-21',
+        valor_recebido: '600',
+        categoria_credito: 'Mensalidade',
+      })
+    );
+    expect(
+      await screen.findByText(/marcada como paga\. R\$\s420,00 ficaram como crédito do irmão\./)
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(creditosMembroApi.getSaldo).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(creditosMembroApi.listMovimentos).toHaveBeenCalledTimes(2));
+  });
+
+  it('bloqueia valor vazio e valor menor que o em aberto, sem chamar a API', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+    await user.click(opcaoPagouMais(dialog));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento' }));
+    expect(within(dialog).getByText('Informe o valor.')).toBeInTheDocument();
+
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '179.99');
+    expect(within(dialog).queryByRole('status')).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento' }));
+    expect(
+      within(dialog).getByText(
+        /O valor recebido não pode ser menor que o valor em aberto da cobrança \(R\$\s180,00\)\./
+      )
+    ).toBeInTheDocument();
+    expect(debitosApi.pagarCobranca).not.toHaveBeenCalled();
+  });
+
+  it('exige a categoria quando há excedente', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+    await user.click(opcaoPagouMais(dialog));
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '600');
+    await user.clear(within(dialog).getByLabelText(/Categoria da receita/));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento e crédito' }));
+    expect(within(dialog).getByText('Informe a categoria.')).toBeInTheDocument();
+    expect(debitosApi.pagarCobranca).not.toHaveBeenCalled();
+  });
+
+  it('valor igual ao em aberto avisa que é a baixa normal e não envia os campos novos', async () => {
+    vi.mocked(debitosApi.pagarCobranca).mockResolvedValue(cobrancaSetembroPaga);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+    await user.click(opcaoPagouMais(dialog));
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '180');
+
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      'Sem diferença: será feita a baixa normal, sem crédito.'
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento' }));
+    await waitFor(() =>
+      expect(debitosApi.pagarCobranca).toHaveBeenCalledWith(1, 5, '2026-09-01', {
+        data_pagamento: '2026-09-21',
+      })
+    );
+  });
+
+  it('desmarcar esconde o campo e volta a enviar só o corpo de sempre', async () => {
+    vi.mocked(debitosApi.pagarCobranca).mockResolvedValue(cobrancaSetembroPaga);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+    await user.click(opcaoPagouMais(dialog));
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '600');
+    await user.click(opcaoPagouMais(dialog));
+
+    expect(within(dialog).queryByLabelText(/Valor recebido/)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento' }));
+    await waitFor(() =>
+      expect(debitosApi.pagarCobranca).toHaveBeenCalledWith(1, 5, '2026-09-01', {
+        data_pagamento: '2026-09-21',
+      })
+    );
+  });
+
+  it('irmão inativo: a opção fica desabilitada com o motivo e a baixa normal continua', async () => {
+    vi.mocked(membrosApi.get).mockResolvedValue({ ...membro, status: 'INATIVO' });
+    vi.mocked(debitosApi.pagarCobranca).mockResolvedValue(cobrancaSetembroPaga);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+
+    expect(opcaoPagouMais(dialog)).toBeDisabled();
+    expect(
+      within(dialog).getByText(/Irmão inativo: não é possível guardar crédito\./)
+    ).toBeInTheDocument();
+    await user.click(opcaoPagouMais(dialog));
+    expect(within(dialog).queryByLabelText(/Valor recebido/)).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento' }));
+    await waitFor(() =>
+      expect(debitosApi.pagarCobranca).toHaveBeenCalledWith(1, 5, '2026-09-01', {
+        data_pagamento: '2026-09-21',
+      })
+    );
+  });
+
+  it('409 do servidor na baixa com excedente aparece no diálogo, que continua aberto', async () => {
+    vi.mocked(debitosApi.pagarCobranca).mockRejectedValue(
+      conflito('O valor recebido e menor que o valor em aberto.')
+    );
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirPagamentoDeSetembro(user);
+    await user.click(opcaoPagouMais(dialog));
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '600');
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento e crédito' }));
+
+    expect(
+      await within(dialog).findByText('O valor recebido e menor que o valor em aberto.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/Valor recebido/)).toHaveValue(600);
+  });
+
+  it('desfazer: mostra o resumo e os dois modos; o padrão desfaz só o pagamento', async () => {
+    vi.mocked(debitosApi.listPorCompetencia).mockResolvedValue([setembroComExcedente, cobrancaAgosto]);
+    vi.mocked(debitosApi.desfazerPagamentoCobranca).mockResolvedValue(cobrancaSetembro);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirDesfazerDeSetembro(user);
+
+    expect(dialog).toHaveTextContent(/recebido R\$\s600,00 · R\$\s420,00 ficaram como crédito/);
+    const soPagamento = within(dialog).getByRole('radio', { name: 'Desfazer só o pagamento' });
+    const tudo = within(dialog).getByRole('radio', { name: 'Cancelar pagamento e crédito' });
+    expect(soPagamento).toBeChecked();
+    expect(tudo).not.toBeChecked();
+    expect(tudo).toBeEnabled();
+    const confirmar = within(dialog).getByRole('button', { name: 'Desfazer só o pagamento' });
+    expect(confirmar).not.toHaveClass('bg-red-600');
+
+    await user.click(confirmar);
+    await waitFor(() =>
+      expect(debitosApi.desfazerPagamentoCobranca).toHaveBeenCalledWith(
+        1,
+        5,
+        '2026-09-01',
+        'SOMENTE_PAGAMENTO'
+      )
+    );
+    expect(
+      await screen.findByText(
+        'Pagamento da cobrança de Setembro/2026 desfeito. O valor recebido continua como crédito do irmão.'
+      )
+    ).toBeInTheDocument();
+    await waitFor(() => expect(creditosMembroApi.getSaldo).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(creditosMembroApi.listMovimentos).toHaveBeenCalledTimes(2));
+  });
+
+  it('desfazer: "Cancelar pagamento e crédito" troca o botão para destrutivo e envia CANCELAR_TUDO', async () => {
+    vi.mocked(debitosApi.listPorCompetencia).mockResolvedValue([setembroComExcedente, cobrancaAgosto]);
+    vi.mocked(debitosApi.desfazerPagamentoCobranca).mockResolvedValue(cobrancaSetembro);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirDesfazerDeSetembro(user);
+
+    await user.click(within(dialog).getByRole('radio', { name: 'Cancelar pagamento e crédito' }));
+    expect(
+      within(dialog).queryByRole('button', { name: 'Desfazer só o pagamento' })
+    ).not.toBeInTheDocument();
+    const confirmar = within(dialog).getByRole('button', { name: 'Cancelar pagamento e crédito' });
+    expect(confirmar).toHaveClass('bg-red-600');
+
+    await user.click(confirmar);
+    await waitFor(() =>
+      expect(debitosApi.desfazerPagamentoCobranca).toHaveBeenCalledWith(
+        1,
+        5,
+        '2026-09-01',
+        'CANCELAR_TUDO'
+      )
+    );
+    expect(
+      await screen.findByText(
+        'Pagamento da cobrança de Setembro/2026 desfeito. A entrada de crédito e a receita dela foram excluídas.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('desfazer: cancelar tudo bloqueado fica desabilitado e mostra o motivo do servidor', async () => {
+    vi.mocked(debitosApi.listPorCompetencia).mockResolvedValue([
+      {
+        ...setembroComExcedente,
+        pagamento_excedente: {
+          ...setembroComExcedente.pagamento_excedente!,
+          pode_cancelar_tudo: false,
+          motivo_bloqueio: 'Parte do crédito já foi usada na cobrança de Outubro/2026.',
+        },
+      },
+      cobrancaAgosto,
+    ]);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirDesfazerDeSetembro(user);
+
+    const tudo = within(dialog).getByRole('radio', { name: 'Cancelar pagamento e crédito' });
+    expect(tudo).toBeDisabled();
+    expect(
+      within(dialog).getByText(
+        /Indisponível: Parte do crédito já foi usada na cobrança de Outubro\/2026\./
+      )
+    ).toBeInTheDocument();
+    await user.click(tudo);
+    expect(within(dialog).getByRole('radio', { name: 'Desfazer só o pagamento' })).toBeChecked();
+    expect(within(dialog).getByRole('button', { name: 'Desfazer só o pagamento' })).toBeInTheDocument();
+  });
+
+  it('desfazer: 409 do servidor aparece no diálogo, que continua aberto', async () => {
+    vi.mocked(debitosApi.listPorCompetencia).mockResolvedValue([setembroComExcedente, cobrancaAgosto]);
+    vi.mocked(debitosApi.desfazerPagamentoCobranca).mockRejectedValue(
+      conflito('O credito desta baixa ja foi usado em outra cobranca.')
+    );
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    const dialog = await abrirDesfazerDeSetembro(user);
+    await user.click(within(dialog).getByRole('radio', { name: 'Cancelar pagamento e crédito' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar pagamento e crédito' }));
+
+    expect(
+      await within(dialog).findByText('O credito desta baixa ja foi usado em outra cobranca.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('extrato: a entrada vinculada a um pagamento não oferece "Excluir" e indica o caminho', async () => {
+    const entradaVinculada: MovimentoCredito = {
+      id: 90,
+      membro_id: 5,
+      tipo: 'ENTRADA',
+      valor: '600.00',
+      data: '2026-09-21',
+      forma_pagamento: 'PIX',
+      lancamento_id: 910,
+      observacao: null,
+      created_at: '2026-09-21T15:00:00Z',
+      competencia_quitada: null,
+      entrada_origem_id: null,
+      competencia_cobranca_vinculada: '2026-09-01',
+    };
+    const entradaAvulsa: MovimentoCredito = {
+      ...entradaVinculada,
+      id: 71,
+      valor: '150.00',
+      data: '2026-08-10',
+      competencia_cobranca_vinculada: null,
+    };
+    vi.mocked(creditosMembroApi.listMovimentos).mockResolvedValue([entradaVinculada, entradaAvulsa]);
+    renderPage();
+
+    expect(
+      await screen.findByText(/Vinculado ao pagamento de Setembro\/2026 — use "Desfazer pagamento"/)
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Excluir crédito de R\$\s600,00/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Excluir crédito de R\$\s150,00 de 10\/08\/2026/ })
+    ).toBeInTheDocument();
   });
 });

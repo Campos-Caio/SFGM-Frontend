@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import axios from 'axios';
 import { CalendarClock, CircleAlert, PiggyBank, Plus, Scale, Trash2 } from 'lucide-react';
 import { creditosMembroApi } from '../../api/creditosMembro';
@@ -43,11 +43,26 @@ interface CreditoMembroSectionProps {
   onAlterado: () => void;
 }
 
-/** Descrição do movimento no extrato (a utilização indica a cobrança quitada). */
-function descreverMovimento(m: MovimentoCredito): string {
+/**
+ * Descrição do movimento no extrato: a utilização indica a cobrança quitada; a
+ * entrada de uma baixa com excedente indica a cobrança a que está vinculada
+ * (ela não pode ser excluída pelo extrato, só pelo "Desfazer pagamento").
+ */
+function descreverMovimento(m: MovimentoCredito): ReactNode {
   const tipo = MOVIMENTO_CREDITO_TIPO_LABELS[m.tipo];
   if (m.tipo === 'UTILIZACAO' && m.competencia_quitada) {
     return `${tipo} — cobrança de ${formatCompetenciaExtenso(m.competencia_quitada)}`;
+  }
+  if (m.tipo === 'ENTRADA' && m.competencia_cobranca_vinculada) {
+    return (
+      <>
+        {tipo}
+        <span className="block text-xs text-slate-500">
+          Vinculado ao pagamento de {formatCompetenciaExtenso(m.competencia_cobranca_vinculada)} —
+          use &quot;Desfazer pagamento&quot; na cobrança.
+        </span>
+      </>
+    );
   }
   return tipo;
 }
@@ -254,8 +269,10 @@ export default function CreditoMembroSection({
       align: 'right',
       width: '5rem',
       // Só a entrada pode ser excluída (o servidor recusa se já tiver sido usada).
+      // A entrada de uma baixa com excedente não é excluída por aqui (409): o
+      // caminho é o "Desfazer pagamento" da cobrança (ver `descreverMovimento`).
       render: (m) =>
-        m.tipo === 'ENTRADA' ? (
+        m.tipo === 'ENTRADA' && !m.competencia_cobranca_vinculada ? (
           <IconButton
             icon={Trash2}
             size="sm"

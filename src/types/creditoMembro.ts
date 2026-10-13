@@ -60,6 +60,14 @@ export interface MovimentoCredito {
   created_at: string;
   /** Competência ("YYYY-MM-01") da cobrança quitada por uma UTILIZACAO (null em ENTRADA). */
   competencia_quitada: string | null;
+  /** Só na UTILIZACAO de uma baixa com excedente: id da ENTRADA registrada na mesma operação. */
+  entrada_origem_id: number | null;
+  /**
+   * Só na ENTRADA de uma baixa com excedente ainda não desfeita: competência
+   * ("YYYY-MM-01") da cobrança quitada na mesma operação. Enquanto preenchida,
+   * a entrada não pode ser excluída (409): use o "Desfazer pagamento" da cobrança.
+   */
+  competencia_cobranca_vinculada: string | null;
 }
 
 /**

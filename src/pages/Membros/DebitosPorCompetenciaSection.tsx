@@ -20,10 +20,11 @@ import {
   DEBITO_TIPO_LABELS,
   type DebitoMembroPagamentoInput,
   type DebitosPorCompetencia,
+  type ModoDesfazerPagamento,
   type PagarComCreditoInput,
 } from '../../types/debito';
 import { currentCompetencia } from '../../utils/businessTime';
-import { pagamentoInfo } from '../../utils/cobrancas';
+import { mensagemModoDesfeito, pagamentoInfo } from '../../utils/cobrancas';
 import { formatCompetenciaExtenso, formatCurrency, formatDataBr } from '../../utils/formatters';
 import { compararValores, paraCentavos } from '../../utils/money';
 import DesfazerPagamentoDialog from './DesfazerPagamentoDialog';
@@ -33,6 +34,8 @@ import PagarComCreditoDialog from './PagarComCreditoDialog';
 interface DebitosPorCompetenciaSectionProps {
   lojaId: number;
   membroId: number;
+  /** Irmão INATIVO: a baixa normal é permitida, mas não o excedente como crédito. */
+  membroInativo: boolean;
   /** Crédito disponível do irmão (`null` enquanto o saldo não carregou ou falhou). */
   creditoDisponivel: string | null;
   /** Muda a cada ação financeira na ficha: recarrega as cobranças. */
@@ -57,6 +60,7 @@ function isEstadoDesatualizado(err: unknown): boolean {
 export default function DebitosPorCompetenciaSection({
   lojaId,
   membroId,
+  membroInativo,
   creditoDisponivel,
   versao,
   onAlterado,
@@ -115,9 +119,14 @@ export default function DebitosPorCompetenciaSection({
     try {
       const atualizada = await debitosApi.pagarCobranca(lojaId, membroId, alvo.competencia, input);
       setPagarAlvo(null);
+      const excedente = atualizada.pagamento_excedente;
       setFeedback({
         variant: 'success',
-        texto: `Cobrança de ${formatCompetenciaExtenso(alvo.competencia)} marcada como paga.`,
+        texto:
+          `Cobrança de ${formatCompetenciaExtenso(alvo.competencia)} marcada como paga.` +
+          (excedente
+            ? ` ${formatCurrency(excedente.valor_excedente)} ficaram como crédito do irmão.`
+            : ''),
       });
       // A resposta já é a cobrança do mês completa e atualizada (mesmo formato
       // do item da lista): substitui-a no estado de imediato; a ficha recarrega
@@ -131,7 +140,8 @@ export default function DebitosPorCompetenciaSection({
         setFeedback({ variant: 'error', texto: extractErrorMessage(err) });
         onAlterado();
       } else {
-        // 422, 500 e rede: mantém o diálogo aberto com a mensagem.
+        // 409 (valor recebido menor que o em aberto, irmão inativo com
+        // excedente), 422, 500 e rede: mantém o diálogo aberto com a mensagem.
         setPagarError(extractErrorMessage(err));
       }
     } finally {
@@ -192,21 +202,22 @@ export default function DebitosPorCompetenciaSection({
     setDesfazerAlvo(cobranca);
   }
 
-  async function handleConfirmarDesfazer() {
+  async function handleConfirmarDesfazer(modo?: ModoDesfazerPagamento) {
     if (!desfazerAlvo || desfazendo) return;
     const alvo = desfazerAlvo;
     setDesfazendo(true);
     setDesfazerError(null);
     try {
-      const atualizada = await debitosApi.desfazerPagamentoCobranca(
-        lojaId,
-        membroId,
-        alvo.competencia
-      );
+      // `modo` só vem na baixa com excedente; sem ele, nenhum corpo é enviado.
+      const atualizada = modo
+        ? await debitosApi.desfazerPagamentoCobranca(lojaId, membroId, alvo.competencia, modo)
+        : await debitosApi.desfazerPagamentoCobranca(lojaId, membroId, alvo.competencia);
       setDesfazerAlvo(null);
       setFeedback({
         variant: 'success',
-        texto: `Pagamento da cobrança de ${formatCompetenciaExtenso(alvo.competencia)} desfeito.`,
+        texto:
+          `Pagamento da cobrança de ${formatCompetenciaExtenso(alvo.competencia)} desfeito.` +
+          mensagemModoDesfeito(modo),
       });
       substituirCobranca(atualizada);
       // Pode ter devolvido crédito ao irmão: recarrega saldo e extrato também.
@@ -217,6 +228,7 @@ export default function DebitosPorCompetenciaSection({
         setFeedback({ variant: 'error', texto: extractErrorMessage(err) });
         onAlterado();
       } else {
+        // 409 (ex.: "cancelar tudo" bloqueado), 500 e rede: mantém o diálogo aberto.
         setDesfazerError(extractErrorMessage(err));
       }
     } finally {
@@ -361,6 +373,7 @@ export default function DebitosPorCompetenciaSection({
         <PagarCobrancaDialog
           key={pagarAlvo.competencia}
           cobranca={pagarAlvo}
+          membroInativo={membroInativo}
           submitting={pagando}
           error={pagarError}
           onConfirm={handleConfirmarPagamento}

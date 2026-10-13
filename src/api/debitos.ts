@@ -6,6 +6,7 @@ import type {
   DebitoMembroPagamentoInput,
   DebitoMembroTipo,
   DebitosPorCompetencia,
+  ModoDesfazerPagamento,
   MotivoMembroIgnorado,
   PagarComCreditoInput,
   SituacaoCompetencia,
@@ -128,14 +129,20 @@ export const debitosApi = {
    * todos os débitos do mês para "em aberto". Se a cobrança foi paga com
    * crédito, o crédito usado volta a ficar disponível para o irmão. Idempotente: cobrança sem débito
    * pago retorna 200 sem alterar nada. Devolve a cobrança já atualizada.
+   * `modo` (baixa com excedente): `SOMENTE_PAGAMENTO` (padrão) mantém o valor
+   * recebido como crédito; `CANCELAR_TUDO` exclui também a entrada de crédito
+   * e a receita dela (409 se bloqueado ou se não houver crédito vinculado).
    */
   desfazerPagamentoCobranca: async (
     lojaId: number,
     membroId: number,
-    competencia: string
+    competencia: string,
+    modo?: ModoDesfazerPagamento
   ): Promise<DebitosPorCompetencia> => {
+    // Sem `modo`, nenhum corpo é enviado (o servidor usa SOMENTE_PAGAMENTO).
     const { data } = await apiClient.post<DebitosPorCompetencia>(
-      `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/desfazer-pagamento`
+      `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/desfazer-pagamento`,
+      modo ? { modo } : undefined
     );
     return data;
   },

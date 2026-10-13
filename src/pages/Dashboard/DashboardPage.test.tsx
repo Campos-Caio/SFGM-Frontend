@@ -10,7 +10,6 @@ import { caixaApi } from '../../api/caixa';
 import { creditosMembroApi } from '../../api/creditosMembro';
 import type { Loja } from '../../types/loja';
 import type { PrestacaoContas } from '../../types/prestacaoContas';
-import type { DebitoMembro } from '../../types/debito';
 import type { Caixa } from '../../types/caixa';
 import type { SaldoMembro } from '../../types/creditoMembro';
 import { StoreProvider } from '../../store/StoreProvider';
@@ -43,24 +42,6 @@ const prestacao: PrestacaoContas = {
   despesas: [],
   total_despesas: '80.00',
   resultado: '120.00',
-};
-
-const debito: DebitoMembro = {
-  id: 1,
-  membro_id: 5,
-  tipo: 'MENSALIDADE',
-  descricao: null,
-  valor: '80.00',
-  data: '2026-08-05',
-  competencia: '2026-08-01',
-  observacao: null,
-  situacao: 'ABERTO',
-  pago_em: null,
-  data_pagamento: null,
-  forma_pagamento: null,
-  debito_recorrente_id: null,
-  created_at: '2026-08-05T00:00:00Z',
-  updated_at: '2026-08-05T00:00:00Z',
 };
 
 const caixa: Caixa = {
@@ -100,24 +81,54 @@ function renderPage() {
   );
 }
 
+/** Cartão de indicador (StatCard) cujo rótulo é `label`. */
+function indicador(label: string): HTMLElement {
+  return screen.getByText(label).closest('div.rounded-lg') as HTMLElement;
+}
+
 describe('DashboardPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.mocked(lojaApi.list).mockResolvedValue([loja]);
     vi.mocked(prestacaoContasApi.get).mockResolvedValue(prestacao);
-    vi.mocked(debitosApi.listByLoja).mockResolvedValue([debito]);
     vi.mocked(caixaApi.get).mockResolvedValue(caixa);
     vi.mocked(creditosMembroApi.listSaldos).mockResolvedValue(saldos);
   });
 
-  it('exibe o nome da loja e os indicadores do mês atual', async () => {
+  it('exibe o nome da loja e o resultado do mês com receitas e despesas', async () => {
     renderPage();
 
     expect(await screen.findByText(/Templários do Asfalto nº 28/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText('R$ 200,00')).toBeInTheDocument());
-    expect(screen.getByText('R$ 80,00')).toBeInTheDocument();
-    expect(screen.getByText('R$ 120,00')).toBeInTheDocument();
-    expect(screen.getByText('Débitos do mês')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('R$ 120,00')).toBeInTheDocument());
+    const resultado = indicador('Resultado do mês');
+    expect(within(resultado).getByText('R$ 120,00')).toHaveClass('text-emerald-600');
+    expect(within(resultado).getByText('R$ 200,00')).toBeInTheDocument();
+    expect(within(resultado).getByText('R$ 80,00')).toBeInTheDocument();
+    expect(within(resultado).getByRole('link', { name: 'Ver prestação de contas' })).toHaveAttribute(
+      'href',
+      '/prestacao-contas'
+    );
+  });
+
+  it('mostra só os 3 indicadores da visão geral, sem o card de débitos do mês', async () => {
+    renderPage();
+
+    await waitFor(() => expect(screen.getByText('R$ 120,00')).toBeInTheDocument());
+    expect(screen.getByText('Saldo do caixa')).toBeInTheDocument();
+    expect(screen.getByText('Resultado do mês')).toBeInTheDocument();
+    expect(screen.getByText('Em aberto (vencido)')).toBeInTheDocument();
+    expect(screen.queryByText('Débitos do mês')).not.toBeInTheDocument();
+    expect(debitosApi.listByLoja).not.toHaveBeenCalled();
+  });
+
+  it('mantém o esqueleto de 3 indicadores até os saldos dos irmãos carregarem', async () => {
+    vi.mocked(creditosMembroApi.listSaldos).mockReturnValue(new Promise(() => {}));
+    renderPage();
+
+    await waitFor(() => expect(caixaApi.get).toHaveBeenCalled());
+    const esqueleto = await screen.findByRole('status', { name: 'Carregando indicadores' });
+    expect(esqueleto.children).toHaveLength(3);
+    expect(screen.queryByText('Saldo do caixa')).not.toBeInTheDocument();
   });
 
   it('exibe o saldo atual do caixa com link para a tela do Caixa', async () => {
@@ -126,7 +137,10 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('R$ 1.234,56')).toBeInTheDocument();
     expect(caixaApi.get).toHaveBeenCalledWith(1);
     expect(screen.getByText('Saldo do caixa')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Ver caixa' })).toHaveAttribute('href', '/caixa');
+    expect(within(indicador('Saldo do caixa')).getByRole('link', { name: 'Ver caixa' })).toHaveAttribute(
+      'href',
+      '/caixa'
+    );
   });
 
   it('destaca o saldo do caixa negativo', async () => {
@@ -150,12 +164,7 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('link', { name: /Gerar mensalidades/i })).toHaveAttribute('href', '/debitos');
   });
 
-  /** Cartão de indicador (StatCard) cujo rótulo é `label`. */
-  function indicador(label: string): HTMLElement {
-    return screen.getByText(label).closest('div.rounded-lg') as HTMLElement;
-  }
-
-  it('mostra o total em aberto (vencido) com o nº de devedores e o total de créditos dos irmãos', async () => {
+  it('mostra o total em aberto (vencido) com o nº de devedores e os créditos dos irmãos em cor neutra', async () => {
     renderPage();
 
     expect(await screen.findByText('R$ 330,10')).toBeInTheDocument();
@@ -167,9 +176,12 @@ describe('DashboardPage', () => {
       'href',
       '/saldos?situacao=DEVEDOR'
     );
-    const creditos = indicador('Créditos de irmãos');
-    expect(within(creditos).getByText('R$ 45,50')).toBeInTheDocument();
-    expect(within(creditos).getByRole('link', { name: 'Ver saldos' })).toHaveAttribute('href', '/saldos');
+    expect(within(emAberto).getByText(/Créditos de irmãos/)).toBeInTheDocument();
+    const creditos = within(emAberto).getByText('R$ 45,50');
+    expect(creditos).toHaveClass('text-slate-700');
+    expect(creditos).not.toHaveClass('text-emerald-600');
+    expect(creditos).not.toHaveClass('text-red-600');
+    expect(within(emAberto).getByRole('link', { name: 'Ver saldos' })).toHaveAttribute('href', '/saldos');
   });
 
   it('falha dos saldos não derruba o painel e pode ser repetida', async () => {
@@ -181,7 +193,7 @@ describe('DashboardPage', () => {
 
     // Os demais indicadores continuam visíveis.
     expect(await screen.findByText('R$ 1.234,56')).toBeInTheDocument();
-    expect(screen.getByText('R$ 200,00')).toBeInTheDocument();
+    expect(within(indicador('Resultado do mês')).getByText('R$ 120,00')).toBeInTheDocument();
     await waitFor(() =>
       expect(within(indicador('Em aberto (vencido)')).getByText(/Não foi possível carregar/)).toBeInTheDocument()
     );
@@ -198,7 +210,9 @@ describe('DashboardPage', () => {
     renderPage();
 
     expect(await screen.findByText('Falha no caixa.')).toBeInTheDocument();
-    expect(await screen.findByText('R$ 330,10')).toBeInTheDocument();
+    expect(within(indicador('Em aberto (vencido)')).getByText('R$ 330,10')).toBeInTheDocument();
+    expect(screen.queryByText('Saldo do caixa')).not.toBeInTheDocument();
+    expect(screen.queryByText('Resultado do mês')).not.toBeInTheDocument();
   });
 
   it('mostra aviso quando não há loja cadastrada', async () => {

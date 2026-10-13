@@ -176,6 +176,7 @@ export default function MembroDetailPage() {
         key={membro.id}
         lojaId={membro.loja_id}
         membroId={membro.id}
+        membroInativo={membro.status === 'INATIVO'}
         creditoDisponivel={saldo?.total_credito ?? null}
         versao={versaoFinanceiro}
         onAlterado={recarregarFinanceiro}

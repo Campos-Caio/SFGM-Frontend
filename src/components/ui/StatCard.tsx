@@ -21,12 +21,22 @@ interface StatCardProps {
   icon?: LucideIcon;
   tone?: StatCardTone;
   hint?: ReactNode;
+  /**
+   * Rodapé opcional (ex.: links "Ver ..."). Quando presente, o cartão ocupa
+   * toda a altura da célula do grid e o rodapé fica preso à base, para que
+   * cartões lado a lado fiquem com a mesma altura e os links alinhados.
+   */
+  footer?: ReactNode;
 }
 
 /** Cartão de indicador (KPI): rótulo, valor em destaque e ícone contextual. */
-export function StatCard({ label, value, icon: Icon, tone = 'neutral', hint }: StatCardProps) {
+export function StatCard({ label, value, icon: Icon, tone = 'neutral', hint, footer }: StatCardProps) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+    <div
+      className={`rounded-lg border border-slate-200 bg-white p-5 shadow-sm${
+        footer ? ' flex h-full flex-col' : ''
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 m-0">{label}</p>
         {Icon ? (
@@ -37,6 +47,9 @@ export function StatCard({ label, value, icon: Icon, tone = 'neutral', hint }: S
       </div>
       <p className={`mt-2 text-2xl font-semibold tabular-nums m-0 ${toneClasses[tone]}`}>{value}</p>
       {hint ? <p className="mt-1 text-xs text-slate-500 m-0">{hint}</p> : null}
+      {footer ? (
+        <div className="mt-auto flex flex-wrap gap-x-4 gap-y-1 pt-4 text-sm">{footer}</div>
+      ) : null}
     </div>
   );
 }
