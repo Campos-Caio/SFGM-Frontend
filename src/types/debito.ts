@@ -1,3 +1,5 @@
+import type { MembroStatus } from './membro';
+
 export type DebitoMembroTipo =
   | 'MENSALIDADE'
   | 'MUTUA'
@@ -27,15 +29,35 @@ export const SITUACAO_LABELS: Record<SituacaoCompetencia, string> = {
   PAGO: 'Pago',
 };
 
-export type FormaPagamento = 'DINHEIRO' | 'PIX' | 'TRANSFERENCIA' | 'DEPOSITO' | 'OUTRO';
+/**
+ * Forma de pagamento como vem nas respostas da API. `CREDITO` é gravada SOMENTE
+ * pelo pagamento de cobrança com o crédito do irmão (`.../pagar-com-credito`):
+ * enviá-la em qualquer payload resulta em 422. Para entrada use
+ * `FormaPagamentoEntrada` / `FORMAS_PAGAMENTO_SELECIONAVEIS`.
+ */
+export type FormaPagamento = 'DINHEIRO' | 'PIX' | 'TRANSFERENCIA' | 'DEPOSITO' | 'OUTRO' | 'CREDITO';
 
+/** Formas aceitas em payloads (todas, exceto `CREDITO`). */
+export type FormaPagamentoEntrada = Exclude<FormaPagamento, 'CREDITO'>;
+
+/** Rótulos de exibição (inclui `CREDITO`, que só aparece em respostas). */
 export const FORMA_PAGAMENTO_LABELS: Record<FormaPagamento, string> = {
   DINHEIRO: 'Dinheiro',
   PIX: 'Pix',
   TRANSFERENCIA: 'Transferência',
   DEPOSITO: 'Depósito',
   OUTRO: 'Outro',
+  CREDITO: 'Crédito do irmão',
 };
+
+/** Opções dos selects de forma de pagamento (na ordem de exibição; sem `CREDITO`). */
+export const FORMAS_PAGAMENTO_SELECIONAVEIS: FormaPagamentoEntrada[] = [
+  'DINHEIRO',
+  'PIX',
+  'TRANSFERENCIA',
+  'DEPOSITO',
+  'OUTRO',
+];
 
 export interface DebitoMembro {
   id: number;
@@ -59,6 +81,25 @@ export interface DebitoMembro {
 }
 
 /**
+ * Dados da baixa com excedente de uma cobrança: o irmão entregou mais que o
+ * valor em aberto, o valor recebido inteiro virou uma ENTRADA de crédito e a
+ * cobrança foi quitada com esse crédito (os débitos vêm com forma `CREDITO`).
+ * Decimais como string.
+ */
+export interface PagamentoExcedente {
+  /** ENTRADA de crédito registrada na baixa (id no extrato do irmão). */
+  movimento_credito_id: number;
+  /** Valor entregue pelo irmão (valor da ENTRADA). */
+  valor_recebido: string;
+  /** Parte que sobrou como crédito: `valor_recebido` − valor quitado. */
+  valor_excedente: string;
+  /** `false` quando o desfazer em modo `CANCELAR_TUDO` seria recusado (409). */
+  pode_cancelar_tudo: boolean;
+  /** Explicação legível do bloqueio (quando `pode_cancelar_tudo` é `false`). */
+  motivo_bloqueio: string | null;
+}
+
+/**
  * "Cobrança" de um membro em uma competência: soma de todos os débitos do mês
  * (o "boleto"). A situação pertence à cobrança, não a cada débito. É o item de
  * `GET /lojas/{loja_id}/membros/{membro_id}/debitos-por-competencia` e também
@@ -72,6 +113,11 @@ export interface DebitosPorCompetencia {
   total: string;
   total_em_aberto: string;
   debitos: DebitoMembro[];
+  /**
+   * Preenchido somente quando a cobrança foi quitada por uma baixa com
+   * excedente (o irmão pagou a mais) ainda não desfeita; `null` nos demais casos.
+   */
+  pagamento_excedente: PagamentoExcedente | null;
 }
 
 /**
@@ -82,16 +128,43 @@ export interface DebitosPorCompetencia {
 export interface CobrancaLoja extends DebitosPorCompetencia {
   membro_id: number;
   membro_nome: string;
+  membro_status: MembroStatus;
 }
 
 /**
  * Corpo opcional de `POST .../cobrancas/{competencia}/pagar`. Sem corpo, o
  * servidor usa a data de hoje (fuso de MS) e nenhuma forma de pagamento.
  * Chaves vazias devem ser omitidas (não enviar null).
+ *
+ * `valor_recebido` (baixa com excedente): quanto o irmão entregou. Maior que o
+ * valor em aberto, a diferença fica como crédito dele; igual, é a baixa
+ * normal; menor, 409. Irmão INATIVO com excedente: 409. `categoria_credito` é
+ * a categoria da receita gerada (padrão do servidor: "Mensalidade"), usada só
+ * quando há excedente.
  */
 export interface DebitoMembroPagamentoInput {
   data_pagamento?: string;
-  forma_pagamento?: FormaPagamento;
+  forma_pagamento?: FormaPagamentoEntrada;
+  valor_recebido?: string;
+  categoria_credito?: string;
+}
+
+/**
+ * O que `POST .../cobrancas/{competencia}/desfazer-pagamento` desfaz.
+ * `SOMENTE_PAGAMENTO` (padrão do servidor): reabre a cobrança; numa baixa com
+ * excedente, o valor recebido inteiro continua como crédito do irmão.
+ * `CANCELAR_TUDO` (só para baixa com excedente): reabre a cobrança e exclui a
+ * entrada de crédito e a receita dela; 409 se estiver bloqueado.
+ */
+export type ModoDesfazerPagamento = 'SOMENTE_PAGAMENTO' | 'CANCELAR_TUDO';
+
+/**
+ * Corpo opcional de `POST .../cobrancas/{competencia}/pagar-com-credito`. Sem
+ * `data_pagamento`, o servidor usa hoje (fuso de MS). A forma gravada é sempre
+ * `CREDITO` (não é enviada).
+ */
+export interface PagarComCreditoInput {
+  data_pagamento?: string;
 }
 
 /**

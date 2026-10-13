@@ -437,3 +437,52 @@ function ListaStub() {
   const location = useLocation();
   return <p data-testid="lista-state">{JSON.stringify(location.state)}</p>;
 }
+
+describe('DebitoFormPage — seleção do membro', () => {
+  const membroInativo: Membro = { ...membro, id: 6, nome: 'Membro Inativo', status: 'INATIVO' };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.mocked(lojaApi.list).mockResolvedValue([loja]);
+    vi.mocked(membrosApi.list).mockResolvedValue([membro, membroInativo]);
+  });
+
+  it('na criação, oferece somente irmãos ativos', async () => {
+    render(
+      <StoreProvider>
+        <MemoryRouter initialEntries={['/debitos/novo']}>
+          <Routes>
+            <Route path="/debitos/novo" element={<DebitoFormPage />} />
+          </Routes>
+        </MemoryRouter>
+      </StoreProvider>
+    );
+
+    await screen.findByRole('option', { name: 'Membro Teste' });
+    const select = screen.getByLabelText(/^Membro/);
+    expect(select).toBeEnabled();
+    const opcoes = within(select).getAllByRole('option').map((o) => o.textContent);
+    expect(opcoes).toEqual(['Selecione...', 'Membro Teste']);
+    expect(screen.getByText('Somente irmãos ativos.')).toBeInTheDocument();
+  });
+
+  it('na edição, o select fica desabilitado e preserva o membro, mesmo inativo', async () => {
+    const debitoDoInativo = { ...debitoAberto, membro_id: 6 };
+    vi.mocked(debitosApi.get).mockResolvedValue(debitoDoInativo);
+    vi.mocked(debitosApi.update).mockResolvedValue(debitoDoInativo);
+    const user = userEvent.setup();
+    renderEdit();
+
+    await screen.findByRole('option', { name: 'Membro Inativo (inativo)' });
+    const select = screen.getByLabelText(/^Membro/);
+    expect(select).toBeDisabled();
+    expect(select).toHaveValue('6');
+    expect(
+      screen.getByText('O membro de um débito já lançado não pode ser alterado.')
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Salvar' }));
+    await waitFor(() => expect(debitosApi.update).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(debitosApi.update).mock.calls[0][1]).not.toHaveProperty('membro_id');
+  });
+});

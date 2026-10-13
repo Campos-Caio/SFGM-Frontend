@@ -6,7 +6,9 @@ import type {
   DebitoMembroPagamentoInput,
   DebitoMembroTipo,
   DebitosPorCompetencia,
+  ModoDesfazerPagamento,
   MotivoMembroIgnorado,
+  PagarComCreditoInput,
   SituacaoCompetencia,
 } from '../types/debito';
 
@@ -99,6 +101,48 @@ export const debitosApi = {
     const { data } = await apiClient.post<DebitosPorCompetencia>(
       `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/pagar`,
       input
+    );
+    return data;
+  },
+  /**
+   * Quita a cobrança inteira usando o crédito adiantado do irmão (forma
+   * `CREDITO`, sem gerar receita nova: o dinheiro entrou quando o crédito foi
+   * registrado). Corpo opcional (sem data, o servidor usa hoje em MS). 409 se
+   * o crédito disponível não cobrir todo o valor em aberto (nada é alterado).
+   * Devolve a cobrança já atualizada (mesmo formato de `pagarCobranca`).
+   */
+  pagarCobrancaComCredito: async (
+    lojaId: number,
+    membroId: number,
+    competencia: string,
+    input: PagarComCreditoInput = {}
+  ): Promise<DebitosPorCompetencia> => {
+    const { data } = await apiClient.post<DebitosPorCompetencia>(
+      `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/pagar-com-credito`,
+      input
+    );
+    return data;
+  },
+  /**
+   * Desfaz a baixa da cobrança (corrige um pagamento registrado por engano):
+   * remove os lançamentos de receita gerados pela baixa (com auditoria) e volta
+   * todos os débitos do mês para "em aberto". Se a cobrança foi paga com
+   * crédito, o crédito usado volta a ficar disponível para o irmão. Idempotente: cobrança sem débito
+   * pago retorna 200 sem alterar nada. Devolve a cobrança já atualizada.
+   * `modo` (baixa com excedente): `SOMENTE_PAGAMENTO` (padrão) mantém o valor
+   * recebido como crédito; `CANCELAR_TUDO` exclui também a entrada de crédito
+   * e a receita dela (409 se bloqueado ou se não houver crédito vinculado).
+   */
+  desfazerPagamentoCobranca: async (
+    lojaId: number,
+    membroId: number,
+    competencia: string,
+    modo?: ModoDesfazerPagamento
+  ): Promise<DebitosPorCompetencia> => {
+    // Sem `modo`, nenhum corpo é enviado (o servidor usa SOMENTE_PAGAMENTO).
+    const { data } = await apiClient.post<DebitosPorCompetencia>(
+      `/lojas/${lojaId}/membros/${membroId}/cobrancas/${competencia}/desfazer-pagamento`,
+      modo ? { modo } : undefined
     );
     return data;
   },

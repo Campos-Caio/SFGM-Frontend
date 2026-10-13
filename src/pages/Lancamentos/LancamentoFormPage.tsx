@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { lancamentosApi } from '../../api/lancamentos';
 import { extractErrorMessage } from '../../api/client';
 import { useCurrentStore } from '../../hooks/useCurrentStore';
+import { ArrowLeft } from 'lucide-react';
 import {
   Alert,
   Button,
@@ -11,12 +12,18 @@ import {
   FormField,
   FormSection,
   Input,
+  LinkButton,
   PageHeader,
   Textarea,
 } from '../../components/ui';
 import { SkeletonCard } from '../../components/ui/Skeleton';
-import type { LancamentoTipo } from '../../types/lancamento';
+import {
+  LANCAMENTO_ORIGEM_ORIENTACAO,
+  type LancamentoOrigem,
+  type LancamentoTipo,
+} from '../../types/lancamento';
 import { competenciaToMonthInput, monthInputToCompetencia } from '../../utils/formatters';
+import { todayBusinessDate } from '../../utils/businessTime';
 
 const CATEGORIAS_SUGERIDAS = [
   'Mensalidades',
@@ -60,13 +67,19 @@ export default function LancamentoFormPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [dataError, setDataError] = useState<string | null>(null);
+  // Origem do lançamento em edição: automático não pode ser editado (409).
+  const [origem, setOrigem] = useState<LancamentoOrigem>('MANUAL');
+  // "Hoje" no fuso de negócio (MS): o backend rejeita data futura com 422.
+  const hoje = todayBusinessDate();
 
   useEffect(() => {
     if (!isEdit || !id) return;
     setLoadingLancamento(true);
     lancamentosApi
       .get(Number(id))
-      .then((l) =>
+      .then((l) => {
+        setOrigem(l.origem);
         setForm({
           tipo: l.tipo,
           categoria: l.categoria,
@@ -75,8 +88,8 @@ export default function LancamentoFormPage() {
           data: l.data,
           competencia_mes: competenciaToMonthInput(l.competencia),
           observacao: l.observacao ?? '',
-        })
-      )
+        });
+      })
       .catch((err) => setLoadError(extractErrorMessage(err)))
       .finally(() => setLoadingLancamento(false));
   }, [id, isEdit]);
@@ -84,6 +97,12 @@ export default function LancamentoFormPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!form.tipo || !loja) return;
+    // Datas "YYYY-MM-DD" comparam corretamente como string.
+    if (form.data > hoje) {
+      setDataError('A data não pode ser futura.');
+      return;
+    }
+    setDataError(null);
     setSaving(true);
     setSaveError(null);
     const payload = {
@@ -131,6 +150,22 @@ export default function LancamentoFormPage() {
       <>
         <PageHeader title={titulo} />
         <Alert variant="error">{loadError}</Alert>
+      </>
+    );
+  }
+
+  if (isEdit && origem !== 'MANUAL') {
+    // Aberto direto pela URL: lançamento automático não tem formulário de edição.
+    return (
+      <>
+        <PageHeader title={titulo} />
+        <Alert variant="warning">
+          Este lançamento foi gerado automaticamente e não pode ser editado.{' '}
+          {LANCAMENTO_ORIGEM_ORIENTACAO[origem]}
+        </Alert>
+        <LinkButton to={cancelUrl} variant="secondary" icon={ArrowLeft}>
+          Voltar para o lançamento
+        </LinkButton>
       </>
     );
   }
@@ -210,10 +245,11 @@ export default function LancamentoFormPage() {
             />
           </FormField>
 
-          <FormField label="Data" htmlFor="data" required>
+          <FormField label="Data" htmlFor="data" required error={dataError ?? undefined}>
             <Input
               id="data"
               type="date"
+              max={hoje}
               value={form.data}
               onChange={(e) => setForm({ ...form, data: e.target.value })}
               required

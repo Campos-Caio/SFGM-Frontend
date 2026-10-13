@@ -4,8 +4,10 @@ import {
   FileBarChart,
   FileText,
   HandCoins,
+  Landmark,
   LayoutDashboard,
   Receipt,
+  Scale,
   Users,
   Wallet,
   X,
@@ -35,8 +37,10 @@ const groups: NavGroup[] = [
     items: [
       { to: '/membros', label: 'Membros', icon: Users },
       { to: '/debitos', label: 'Débitos', icon: Receipt },
-      { to: '/creditos', label: 'Créditos', icon: HandCoins },
+      { to: '/cobrancas', label: 'Cobranças', icon: HandCoins },
+      { to: '/saldos', label: 'Saldos dos irmãos', icon: Scale },
       { to: '/lancamentos', label: 'Lançamentos', icon: Wallet },
+      { to: '/caixa', label: 'Caixa', icon: Landmark },
     ],
   },
   {

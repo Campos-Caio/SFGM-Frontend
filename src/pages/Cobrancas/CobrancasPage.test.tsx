@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import CreditosPage from './CreditosPage';
+import CobrancasPage from './CobrancasPage';
 import { lojaApi } from '../../api/loja';
 import { membrosApi } from '../../api/membros';
 import { debitosApi } from '../../api/debitos';
@@ -69,6 +69,8 @@ function debito(overrides: Partial<DebitoMembro>): DebitoMembro {
 const cobrancaAlice: CobrancaLoja = {
   membro_id: 5,
   membro_nome: 'Alice Souza',
+  membro_status: 'ATIVO',
+  pagamento_excedente: null,
   competencia: '2026-09-01',
   situacao: 'ABERTO',
   total: '130.10',
@@ -82,6 +84,8 @@ const cobrancaAlice: CobrancaLoja = {
 const cobrancaBruno: CobrancaLoja = {
   membro_id: 7,
   membro_nome: 'Bruno Lima',
+  membro_status: 'ATIVO',
+  pagamento_excedente: null,
   competencia: '2026-09-01',
   situacao: 'ABERTO',
   total: '0.20',
@@ -102,14 +106,28 @@ const alicePaga: DebitosPorCompetencia = {
     forma_pagamento: 'PIX' as const,
     pago_em: '2026-09-20T15:00:00Z',
   })),
+  pagamento_excedente: null,
+};
+
+/** Resposta do POST de baixa com excedente: R$ 130,10 quitados com R$ 500,00 recebidos. */
+const alicePagaComExcedente: DebitosPorCompetencia = {
+  ...alicePaga,
+  debitos: alicePaga.debitos.map((d) => ({ ...d, forma_pagamento: 'CREDITO' as const })),
+  pagamento_excedente: {
+    movimento_credito_id: 90,
+    valor_recebido: '500.00',
+    valor_excedente: '369.90',
+    pode_cancelar_tudo: true,
+    motivo_bloqueio: null,
+  },
 };
 
 function renderPage() {
   return render(
     <StoreProvider>
-      <MemoryRouter initialEntries={['/creditos']}>
+      <MemoryRouter initialEntries={['/cobrancas']}>
         <Routes>
-          <Route path="/creditos" element={<CreditosPage />} />
+          <Route path="/cobrancas" element={<CobrancasPage />} />
         </Routes>
       </MemoryRouter>
     </StoreProvider>
@@ -120,7 +138,7 @@ function cardDe(nome: string): HTMLElement {
   return screen.getByRole('region', { name: new RegExp(nome) });
 }
 
-describe('CreditosPage', () => {
+describe('CobrancasPage', () => {
   beforeEach(() => {
     vi.resetAllMocks();
     // 2026-10-01T02:30Z = 30/09/2026 22:30 em MS: o mês padrão é setembro (fuso de negócio).
@@ -347,6 +365,116 @@ describe('CreditosPage', () => {
     );
   });
 
+  it('baixa com pagamento a mais: envia o valor recebido e avisa o crédito gerado', async () => {
+    vi.mocked(debitosApi.pagarCobranca).mockResolvedValue(alicePagaComExcedente);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    await screen.findByRole('link', { name: 'Alice Souza' });
+
+    await user.click(
+      within(cardDe('Alice Souza')).getByRole('button', { name: /Marcar como paga/ })
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByLabelText(/Valor recebido/)).not.toBeInTheDocument();
+    await user.click(
+      within(dialog).getByRole('checkbox', { name: 'O irmão pagou mais que o total' })
+    );
+    await user.type(within(dialog).getByLabelText(/Valor recebido/), '500');
+    expect(within(dialog).getByRole('status')).toHaveTextContent(
+      /Cobrança R\$\s130,10 · Crédito do irmão R\$\s369,90/
+    );
+    await user.click(within(dialog).getByRole('button', { name: 'Confirmar pagamento e crédito' }));
+
+    await waitFor(() =>
+      expect(debitosApi.pagarCobranca).toHaveBeenCalledWith(1, 5, '2026-09-01', {
+        data_pagamento: '2026-09-30',
+        valor_recebido: '500',
+        categoria_credito: 'Mensalidade',
+      })
+    );
+    expect(
+      await screen.findByText(
+        /Cobrança de Alice Souza de Setembro\/2026 marcada como paga\. R\$\s369,90 ficaram como crédito do irmão\./
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('irmão inativo (membro_status): a opção de pagamento a mais fica desabilitada com o motivo', async () => {
+    vi.mocked(debitosApi.listCobrancas).mockResolvedValue([
+      { ...cobrancaAlice, membro_status: 'INATIVO' },
+      cobrancaBruno,
+    ]);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    await screen.findByRole('link', { name: 'Alice Souza' });
+
+    await user.click(
+      within(cardDe('Alice Souza')).getByRole('button', { name: /Marcar como paga/ })
+    );
+    let dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'O irmão pagou mais que o total' })
+    ).toBeDisabled();
+    expect(within(dialog).getByText(/Irmão inativo: não é possível guardar crédito\./)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+
+    // Irmão ativo: a opção fica disponível.
+    await user.click(
+      within(cardDe('Bruno Lima')).getByRole('button', { name: /Marcar como paga/ })
+    );
+    dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('checkbox', { name: 'O irmão pagou mais que o total' })
+    ).toBeEnabled();
+  });
+
+  it('desfazer baixa com excedente: escolhe o modo, envia-o e mantém o irmão no item', async () => {
+    vi.mocked(debitosApi.listCobrancas).mockResolvedValue([
+      { ...cobrancaAlice, ...alicePagaComExcedente },
+      cobrancaBruno,
+    ]);
+    vi.mocked(debitosApi.desfazerPagamentoCobranca).mockResolvedValue({
+      competencia: cobrancaAlice.competencia,
+      situacao: cobrancaAlice.situacao,
+      total: cobrancaAlice.total,
+      total_em_aberto: cobrancaAlice.total_em_aberto,
+      debitos: cobrancaAlice.debitos,
+      pagamento_excedente: null,
+    });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderPage();
+    await screen.findByRole('link', { name: 'Alice Souza' });
+    await user.selectOptions(screen.getByLabelText('Situação'), 'Todas');
+    await user.click(screen.getByRole('button', { name: 'Filtrar' }));
+    await waitFor(() => expect(debitosApi.listCobrancas).toHaveBeenCalledTimes(2));
+    await screen.findByRole('link', { name: 'Alice Souza' });
+
+    await user.click(
+      within(cardDe('Alice Souza')).getByRole('button', { name: /Desfazer o pagamento/ })
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent(/recebido R\$\s500,00 · R\$\s369,90 ficaram como crédito/);
+    await user.click(within(dialog).getByRole('radio', { name: 'Cancelar pagamento e crédito' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar pagamento e crédito' }));
+
+    await waitFor(() =>
+      expect(debitosApi.desfazerPagamentoCobranca).toHaveBeenCalledWith(
+        1,
+        5,
+        '2026-09-01',
+        'CANCELAR_TUDO'
+      )
+    );
+    expect(
+      await screen.findByText(
+        'Pagamento da cobrança de Alice Souza de Setembro/2026 desfeito. A entrada de crédito e a receita dela foram excluídas.'
+      )
+    ).toBeInTheDocument();
+    const card = cardDe('Alice Souza');
+    expect(within(card).getByRole('link', { name: 'Alice Souza' })).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: /Marcar como paga/ })).toBeInTheDocument();
+  });
+
   it('não oferece a baixa sem permissão', async () => {
     vi.mocked(useCanPagarDebito).mockReturnValue(false);
     renderPage();
@@ -386,7 +514,7 @@ describe('CreditosPage', () => {
     renderPage();
 
     await waitFor(() => expect(lojaApi.list).toHaveBeenCalled());
-    expect(await screen.findByText('Cadastre a loja antes de gerenciar créditos.')).toBeInTheDocument();
+    expect(await screen.findByText('Cadastre a loja antes de gerenciar cobranças.')).toBeInTheDocument();
     expect(debitosApi.listCobrancas).not.toHaveBeenCalled();
   });
 });

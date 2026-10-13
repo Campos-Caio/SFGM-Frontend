@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import LancamentosPage from './LancamentosPage';
@@ -39,6 +39,7 @@ const lancamento: Lancamento = {
   data: '2026-08-05',
   competencia: '2026-08-01',
   observacao: null,
+  origem: 'MANUAL',
   created_at: '2026-08-05T00:00:00Z',
   updated_at: '2026-08-05T00:00:00Z',
 };
@@ -182,5 +183,46 @@ describe('LancamentosPage — filtros, indicadores e lista', () => {
       expect(prestacaoContasApi.get).toHaveBeenCalledWith(1, '2026-05-01')
     );
     expect(screen.getByLabelText('Competência')).toHaveValue('2026-05');
+  });
+});
+
+describe('LancamentosPage — origem do lançamento', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.setSystemTime(AGORA);
+    vi.resetAllMocks();
+    vi.mocked(lojaApi.list).mockResolvedValue([loja]);
+    vi.mocked(prestacaoContasApi.get).mockResolvedValue(prestacao);
+    vi.mocked(lancamentosApi.listByLoja).mockResolvedValue([
+      lancamento,
+      { ...lancamento, id: 2, descricao: 'Baixa de cobrança', origem: 'BAIXA_COBRANCA' },
+      { ...lancamento, id: 3, descricao: 'Crédito adiantado', origem: 'CREDITO_MEMBRO' },
+    ]);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function linhaDe(descricao: string): HTMLElement {
+    return screen.getByText(descricao).closest('tr') as HTMLElement;
+  }
+
+  it('só o lançamento MANUAL tem "Editar"; os automáticos mostram o badge de origem', async () => {
+    renderPage();
+
+    await screen.findByText('Baixa de cobrança');
+    const manual = linhaDe('Mensalidade de agosto');
+    expect(within(manual).getByRole('link', { name: 'Editar' })).toBeInTheDocument();
+    expect(within(manual).queryByText('Pagamento de cobrança')).not.toBeInTheDocument();
+
+    const baixa = linhaDe('Baixa de cobrança');
+    expect(within(baixa).getByText('Pagamento de cobrança')).toBeInTheDocument();
+    expect(within(baixa).queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
+    expect(within(baixa).getByRole('link', { name: 'Ver' })).toBeInTheDocument();
+
+    const credito = linhaDe('Crédito adiantado');
+    expect(within(credito).getByText('Crédito de irmão')).toBeInTheDocument();
+    expect(within(credito).queryByRole('link', { name: 'Editar' })).not.toBeInTheDocument();
   });
 });

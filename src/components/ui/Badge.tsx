@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react';
 import { SITUACAO_LABELS, type SituacaoCompetencia } from '../../types/debito';
+import { SITUACAO_SALDO_LABELS, type SituacaoSaldo } from '../../types/creditoMembro';
+import { LANCAMENTO_ORIGEM_LABELS, type LancamentoOrigem } from '../../types/lancamento';
 
 export type BadgeVariant = 'success' | 'danger' | 'warning' | 'neutral' | 'info';
 
@@ -55,6 +57,30 @@ export function SituacaoBadge({ situacao }: { situacao: SituacaoCompetencia }) {
       {SITUACAO_LABELS[situacao]}
     </Badge>
   );
+}
+
+const situacaoSaldoVariants: Record<SituacaoSaldo, BadgeVariant> = {
+  DEVEDOR: 'danger',
+  CREDOR: 'success',
+  EM_DIA: 'neutral',
+};
+
+/** Badge padronizado para a situação do saldo do irmão (Devedor/Credor/Em dia). */
+export function SituacaoSaldoBadge({ situacao }: { situacao: SituacaoSaldo }) {
+  return (
+    <Badge variant={situacaoSaldoVariants[situacao]} dot>
+      {SITUACAO_SALDO_LABELS[situacao]}
+    </Badge>
+  );
+}
+
+/**
+ * Badge da origem de um lançamento automático ("Pagamento de cobrança",
+ * "Crédito de irmão"). Lançamento MANUAL não exibe badge.
+ */
+export function OrigemLancamentoBadge({ origem }: { origem: LancamentoOrigem }) {
+  if (origem === 'MANUAL') return null;
+  return <Badge variant="info">{LANCAMENTO_ORIGEM_LABELS[origem]}</Badge>;
 }
 
 /** Badge padronizado para o status Ativo/Inativo de um Membro. */

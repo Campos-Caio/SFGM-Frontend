@@ -67,7 +67,12 @@ export default function DebitoFormPage() {
   const [confirmEmMassaOpen, setConfirmEmMassaOpen] = useState(false);
   // No modo em massa a descrição é obrigatória (não vazia após trim).
   const [descricaoError, setDescricaoError] = useState<string | null>(null);
-  const membrosAtivos = membros.filter((m) => m.status === 'ATIVO').length;
+  // Débito novo só para irmão ativo (o servidor recusa inativo com 409). Na
+  // edição o membro não muda (a API não permite reatribuir): o select fica
+  // desabilitado e lista todos, para exibir o membro atual mesmo se inativo.
+  const ativos = membros.filter((m) => m.status === 'ATIVO');
+  const membrosAtivos = ativos.length;
+  const opcoesMembro = isEdit ? membros : ativos;
 
   useEffect(() => {
     if (loja) {
@@ -215,19 +220,30 @@ export default function DebitoFormPage() {
             />
           )}
           {!emMassa && (
-            <FormField label="Membro" htmlFor="membro_id" required>
+            <FormField
+              label="Membro"
+              htmlFor="membro_id"
+              required
+              hint={
+                isEdit
+                  ? 'O membro de um débito já lançado não pode ser alterado.'
+                  : 'Somente irmãos ativos.'
+              }
+            >
               <Select
                 id="membro_id"
                 value={form.membro_id}
                 onChange={(e) => setForm({ ...form, membro_id: e.target.value })}
                 required
+                disabled={isEdit}
               >
                 <option value="" disabled>
                   Selecione...
                 </option>
-                {membros.map((m) => (
+                {opcoesMembro.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.nome}
+                    {m.status === 'INATIVO' ? ' (inativo)' : ''}
                   </option>
                 ))}
               </Select>
